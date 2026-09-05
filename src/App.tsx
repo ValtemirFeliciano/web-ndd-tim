@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Braces, Download, FileDown, FileJson2, Radar, Sparkles } from "lucide-react";
+import { Braces, Copy, Download, FileDown, FileJson2, Radar, Sparkles } from "lucide-react";
 import Header, { type TesteState } from "./components/Header";
 import UploadZones, { formatarBytes } from "./components/UploadZones";
 import ExtractionPanel from "./components/ExtractionPanel";
@@ -268,11 +268,43 @@ export default function App() {
           ? `Não foi possível abrir o template ("${template.nome}"): arquivo corrompido, protegido por senha ou com recursos que a biblioteca não lê (gráficos, tabela dinâmica, macros). Remova o template no passo 02 e gere com o modelo embutido.`
           : msg;
       setErroExcel(amigavel);
-      log("error", `Falha ao gerar o .xlsx: ${amigavel}`);
+      log("error", `Falha ao gerar o .xlsx: ${amigavel}`, typeof e?.stack === "string" ? e.stack : undefined);
     } finally {
       setGerando(false);
     }
   };
+
+  const copiarDiagnostico = useCallback(async (): Promise<boolean> => {
+    const linhas: string[] = [
+      "═══ DIAGNÓSTICO NDDFORGE ═══",
+      `Quando: ${new Date().toLocaleString("pt-BR")}`,
+      `Navegador: ${navigator.userAgent}`,
+      `Modelo Gemini: ${modelo}`,
+      `PPI: ${ppi ? `${ppi.nome} (${formatarBytes(ppi.tamanho)}, ${ppi.mime})` : "nenhum"}`,
+      `Template: ${template ? `${template.nome} (${formatarBytes(template.tamanho)})` : "modelo embutido"}`,
+      `Extração: ${meta ? `ok em ${((meta as any).duracaoMs ?? 0) / 1000}s` : "não realizada"}`,
+      `Resultado Excel: ${saidaExcel ? `gerado (${saidaExcel.nome}, ${saidaExcel.kb})` : erroExcel ? `FALHOU — ${erroExcel}` : "não gerado"}`,
+      "",
+      "── Linha do tempo ──",
+      ...(logs.length ? logs.map((l) => `[${l.hora}] ${l.level.toUpperCase().padEnd(5)} ${l.msg}${l.detalhe ? "\n" + l.detalhe : ""}`) : ["(sem eventos)"]),
+      "",
+      "── JSON extraído ──",
+      dados ? JSON.stringify(dados, null, 2) : "(vazio)",
+    ];
+    const texto = linhas.join("\n");
+    try {
+      await navigator.clipboard.writeText(texto);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = texto;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    log("ok", "Relatório de diagnóstico copiado para a área de transferência (sem a chave da API).");
+    return true;
+  }, [modelo, ppi, template, meta, saidaExcel, erroExcel, logs, dados, log]);
 
   const baixarJson = () => {
     if (!dados) return;
@@ -409,9 +441,17 @@ export default function App() {
                       falha ao gerar o .xlsx
                     </p>
                     <p className="mt-1.5 font-mono text-[11px] leading-snug text-err-400/90">{erroExcel}</p>
-                    <p className="mt-1.5 font-mono text-[10px] text-mist-500">
-                      stack completa no console do navegador (F12 → Console) · timeline na aba de debug
-                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={() => void copiarDiagnostico()}
+                        className="inline-flex items-center gap-1.5 rounded border border-err-400/50 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-err-400 transition-colors hover:bg-err-500/15"
+                      >
+                        <Copy size={10} /> copiar diagnóstico completo
+                      </button>
+                      <p className="font-mono text-[10px] text-mist-500">
+                        a stack completa está na "Linha do tempo" do painel de debug
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -517,6 +557,7 @@ export default function App() {
               rawRequest={rawRequest}
               rawResponse={rawResponse}
               jsonExtraido={dados ? JSON.stringify(dados, null, 2) : ""}
+              onCopiarDiagnostico={copiarDiagnostico}
             />
           </div>
         </div>

@@ -31,6 +31,7 @@ interface Props {
   rawRequest: string;
   rawResponse: string;
   jsonExtraido: string;
+  onCopiarDiagnostico?: () => Promise<boolean>;
 }
 
 function IconeStep({ status }: { status: StepStatus }) {
@@ -67,16 +68,27 @@ function BotaoCopiar({ texto }: { texto: string }) {
   );
 }
 
-export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jsonExtraido }: Props) {
+export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jsonExtraido, onCopiarDiagnostico }: Props) {
   const [aba, setAba] = useState<Aba>("timeline");
+  const [diagCopiado, setDiagCopiado] = useState(false);
   const fimRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fimRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [logs.length]);
 
-  const abas: { id: Aba; rotulo: string; badge?: number; conteudo: string }[] = [
-    { id: "timeline", rotulo: "Linha do tempo", badge: logs.length, conteudo: "" },
+  const erros = logs.filter((l) => l.level === "error").length;
+  const avisos = logs.filter((l) => l.level === "warn").length;
+
+  const abas: { id: Aba; rotulo: string; badge?: number; badgeVermelho?: boolean; badgeAmbar?: boolean; conteudo: string }[] = [
+    {
+      id: "timeline",
+      rotulo: "Linha do tempo",
+      badge: erros > 0 ? erros : avisos > 0 ? avisos : logs.length,
+      badgeVermelho: erros > 0,
+      badgeAmbar: erros === 0 && avisos > 0,
+      conteudo: "",
+    },
     { id: "prompt", rotulo: "Prompt", conteudo: PROMPT_EXTRACAO },
     { id: "request", rotulo: "Requisição", conteudo: rawRequest },
     { id: "response", rotulo: "Resposta bruta", conteudo: rawResponse },
@@ -92,6 +104,29 @@ export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jso
           <h3 className="font-display text-xs font-semibold uppercase tracking-[0.16em] text-mist-100">
             Pipeline de extração
           </h3>
+          {erros > 0 && (
+            <span className="rounded border border-err-500/40 bg-err-500/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-wider text-err-400">
+              {erros} erro{erros > 1 ? "s" : ""}
+            </span>
+          )}
+          {onCopiarDiagnostico && (
+            <button
+              onClick={async () => {
+                try {
+                  await onCopiarDiagnostico();
+                  setDiagCopiado(true);
+                  setTimeout(() => setDiagCopiado(false), 1800);
+                } catch {
+                  /* clipboard indisponível */
+                }
+              }}
+              className="ml-auto flex items-center gap-1 rounded border border-ink-500 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-mist-300 transition-colors hover:border-amber-500 hover:text-amber-400"
+              title="Copia logs, erros, stack e ambiente para a área de transferência (sem a chave da API)"
+            >
+              {diagCopiado ? <Check size={10} className="text-ok-400" /> : <Copy size={10} />}
+              {diagCopiado ? "copiado" : "diagnóstico"}
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {STEPS.map((s, i) => {
@@ -137,7 +172,17 @@ export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jso
           >
             {a.rotulo}
             {a.badge !== undefined && a.badge > 0 && (
-              <span className="ml-1.5 rounded bg-ink-700 px-1 text-[9px] text-cyan-300">{a.badge}</span>
+              <span
+                className={`ml-1.5 rounded px-1 text-[9px] ${
+                  a.badgeVermelho
+                    ? "bg-err-500/25 text-err-400"
+                    : a.badgeAmbar
+                    ? "bg-warn-400/20 text-warn-400"
+                    : "bg-ink-700 text-cyan-300"
+                }`}
+              >
+                {a.badge}
+              </span>
             )}
           </button>
         ))}
