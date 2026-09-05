@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ExternalLink, KeyRound, Radar, RefreshCw, Zap } from "lucide-react";
+import { ChevronDown, ExternalLink, FileCog, KeyRound, Radar, RefreshCw, ScanLine, Zap } from "lucide-react";
 import { MODELOS_PADRAO } from "../lib/gemini";
 
 export interface TesteState {
@@ -17,6 +17,8 @@ interface Props {
   onTestar: () => void;
   teste: TesteState;
   listando: boolean;
+  pagina: "extracao" | "config";
+  onPagina: (p: "extracao" | "config") => void;
 }
 
 function LogoTorre({ varredura }: { varredura: boolean }) {
@@ -38,7 +40,7 @@ function LogoTorre({ varredura }: { varredura: boolean }) {
 }
 
 export default function Header({
-  apiKey, modelo, modelos, onApiKeyChange, onModeloChange, onListarModelos, onTestar, teste, listando,
+  apiKey, modelo, modelos, onApiKeyChange, onModeloChange, onListarModelos, onTestar, teste, listando, pagina, onPagina,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [mostrarChave, setMostrarChave] = useState(false);
@@ -70,6 +72,31 @@ export default function Header({
             PPI → Excel · extração com Gemini
           </p>
         </div>
+
+        <nav className="ml-4 hidden items-center gap-1 rounded-md border border-ink-600 bg-ink-850 p-1 sm:flex">
+          <button
+            onClick={() => onPagina("extracao")}
+            className={`flex items-center gap-1.5 rounded px-3 py-1.5 font-display text-xs font-semibold transition-all ${
+              pagina === "extracao"
+                ? "bg-amber-500 text-ink-950 shadow-[0_2px_10px_-2px_rgba(255,178,36,0.5)]"
+                : "text-mist-300 hover:text-amber-400"
+            }`}
+          >
+            <ScanLine size={13} />
+            Extração
+          </button>
+          <button
+            onClick={() => onPagina("config")}
+            className={`flex items-center gap-1.5 rounded px-3 py-1.5 font-display text-xs font-semibold transition-all ${
+              pagina === "config"
+                ? "bg-cyan-400 text-ink-950 shadow-[0_2px_10px_-2px_rgba(34,211,238,0.5)]"
+                : "text-mist-300 hover:text-cyan-300"
+            }`}
+          >
+            <FileCog size={13} />
+            Mapeamento & Prompt
+          </button>
+        </nav>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <div className="hidden items-center gap-2 rounded border border-ink-600 bg-ink-850 px-2.5 py-1.5 font-mono text-[11px] text-mist-300 md:flex">

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CheckCircle2, Circle, Copy, Loader2, Terminal, XCircle } from "lucide-react";
-import { PROMPT_EXTRACAO } from "../lib/prompt";
 import type { LogEntry, LogLevel, StepId, StepStatus } from "../types";
 
 const STEPS: { id: StepId; rotulo: string; detalhe: string }[] = [
@@ -31,6 +30,7 @@ interface Props {
   rawRequest: string;
   rawResponse: string;
   jsonExtraido: string;
+  promptUsado: string;
   onCopiarDiagnostico?: () => Promise<boolean>;
 }
 
@@ -68,7 +68,7 @@ function BotaoCopiar({ texto }: { texto: string }) {
   );
 }
 
-export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jsonExtraido, onCopiarDiagnostico }: Props) {
+export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jsonExtraido, promptUsado, onCopiarDiagnostico }: Props) {
   const [aba, setAba] = useState<Aba>("timeline");
   const [diagCopiado, setDiagCopiado] = useState(false);
   const fimRef = useRef<HTMLDivElement>(null);
@@ -89,7 +89,7 @@ export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jso
       badgeAmbar: erros === 0 && avisos > 0,
       conteudo: "",
     },
-    { id: "prompt", rotulo: "Prompt", conteudo: PROMPT_EXTRACAO },
+    { id: "prompt", rotulo: "Prompt (configurado)", conteudo: promptUsado },
     { id: "request", rotulo: "Requisição", conteudo: rawRequest },
     { id: "response", rotulo: "Resposta bruta", conteudo: rawResponse },
     { id: "json", rotulo: "JSON extraído", conteudo: jsonExtraido },

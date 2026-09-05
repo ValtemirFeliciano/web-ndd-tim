@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Braces, Copy, Download, FileDown, FileJson2, Radar, Sparkles } from "lucide-react";
 import Header, { type TesteState } from "./components/Header";
 import UploadZones, { formatarBytes } from "./components/UploadZones";
 import ExtractionPanel from "./components/ExtractionPanel";
 import DebugConsole from "./components/DebugConsole";
+import ConfigPage from "./components/ConfigPage";
 import { extrairDoPdf, listarModelos, testarConexao, validarDados, MODELOS_PADRAO } from "./lib/gemini";
 import { gerarNddPreenchido, baixarBlob } from "./lib/excel";
+import { carregarConfig, salvarConfig, montarPromptFinal } from "./lib/mapping";
 import {
   EQUIPAMENTO_VAZIO,
-  type ArquivoInfo, type DadosPPI, type Equipamento, type LogEntry, type LogLevel,
+  type ArquivoInfo, type ConfigAutomacao, type DadosPPI, type Equipamento, type LogEntry, type LogLevel,
   type ResultadoExtracao, type StepId, type StepStatus, type TemplateInfo,
 } from "./types";
 
@@ -78,6 +80,21 @@ export default function App() {
   const [saidaExcel, setSaidaExcel] = useState<{ url: string; nome: string; aba: string; celulas: number; kb: string } | null>(null);
   const saidaUrlRef = useRef<string | null>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
+
+  /* navegação + automação configurável (mapa de células & prompt) */
+  const [pagina, setPagina] = useState<"extracao" | "config">("extracao");
+  const [cfg, setCfg] = useState<ConfigAutomacao>(() => carregarConfig());
+  const primeiroRenderCfg = useRef(true);
+  const promptFinal = useMemo(() => montarPromptFinal(cfg), [cfg]);
+
+  useEffect(() => {
+    if (primeiroRenderCfg.current) {
+      primeiroRenderCfg.current = false;
+      return;
+    }
+    const t = setTimeout(() => salvarConfig(cfg), 350);
+    return () => clearTimeout(t);
+  }, [cfg]);
 
   const log = useCallback((level: LogLevel, msg: string, detalhe?: string) => {
     const d = new Date();
@@ -184,7 +201,8 @@ export default function App() {
 
       marcarStep("gemini", "running");
       setFase("A IA está lendo o PPI (pode levar ~30s)…");
-      const r = await extrairDoPdf(apiKey.trim(), modelo, ppi, log);
+      log("info", `Prompt da configuração aplicado: ${promptFinal.length} chars · ${cfg.mapeamento.length} regra(s) no mapa · tabela de equipamentos a partir da linha ${cfg.linhaInicialEq}.`);
+      const r = await extrairDoPdf(apiKey.trim(), modelo, ppi, promptFinal, log);
       marcarStep("gemini", "done");
       setRawRequest(r.rawRequest);
       setRawResponse(r.rawResponse);
@@ -231,6 +249,9 @@ export default function App() {
   const onCampo = (chave: keyof DadosPPI, valor: string) => {
     setDados((prev) => (prev ? { ...prev, [chave]: valor } : prev));
   };
+  const onExtra = (chave: string, valor: string) => {
+    setDados((prev) => (prev ? { ...prev, extras: { ...(prev.extras ?? {}), [chave]: valor } } : prev));
+  };
   const onEquip = (idx: number, chave: keyof Equipamento, valor: string) => {
     setDados((prev) => {
       if (!prev) return prev;
@@ -256,7 +277,7 @@ export default function App() {
     setErroExcel("");
     log("info", template ? `Gerando Excel sobre o template "${template.nome}"…` : "Gerando Excel com o template padrão embutido…");
     try {
-      const r = await gerarNddPreenchido(dados, template?.buffer ?? null, log);
+      const r = await gerarNddPreenchido(dados, cfg, template?.buffer ?? null, log);
       if (!r.blob || r.blob.size === 0) {
         throw new Error("O arquivo gerado saiu vazio — copie o log da aba 'Linha do tempo' e tente sem o template.");
       }
@@ -368,8 +389,13 @@ export default function App() {
         onTestar={aoTestar}
         teste={teste}
         listando={listando}
+        pagina={pagina}
+        onPagina={setPagina}
       />
 
+      {pagina === "config" ? (
+        <ConfigPage cfg={cfg} onChange={setCfg} onVoltar={() => setPagina("extracao")} />
+      ) : (
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[400px_1fr]">
         {/* ============ coluna esquerda: entrada ============ */}
         <div className="grid content-start gap-5">
@@ -552,6 +578,7 @@ export default function App() {
                 onEquip={onEquip}
                 onAddEquip={addEquip}
                 onRemoveEquip={removeEquip}
+                onExtra={onExtra}
               />
             )
           )}
@@ -563,11 +590,13 @@ export default function App() {
               rawRequest={rawRequest}
               rawResponse={rawResponse}
               jsonExtraido={dados ? JSON.stringify(dados, null, 2) : ""}
+              promptUsado={promptFinal}
               onCopiarDiagnostico={copiarDiagnostico}
             />
           </div>
         </div>
       </main>
+      )}
 
       <footer className="border-t border-ink-600/60 py-5">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 font-mono text-[10px] uppercase tracking-wider text-mist-600 sm:px-6">

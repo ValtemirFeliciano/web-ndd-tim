@@ -1,4 +1,4 @@
-import { AlertTriangle, Crosshair, MapPin, Plus, Trash2, Wrench } from "lucide-react";
+import { AlertTriangle, Crosshair, MapPin, Plus, Puzzle, Trash2, Wrench } from "lucide-react";
 import { CAMPOS_PRINCIPAIS, EQUIPAMENTO_VAZIO, type DadosPPI, type Equipamento } from "../types";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
   onEquip: (idx: number, chave: keyof Equipamento, valor: string) => void;
   onAddEquip: () => void;
   onRemoveEquip: (idx: number) => void;
+  onExtra?: (chave: string, valor: string) => void;
 }
 
 function Campo({
@@ -63,7 +64,9 @@ const COLS_EQ: { chave: keyof Equipamento; rotulo: string; w: string }[] = [
   { chave: "aev_com_ca", rotulo: "AEV c/CA", w: "w-20" },
 ];
 
-export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip, onAddEquip, onRemoveEquip }: Props) {
+export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip, onAddEquip, onRemoveEquip, onExtra }: Props) {
+  const extras = dados.extras ?? {};
+  const chavesExtras = Object.keys(extras);
   const preenchidos = CAMPOS_PRINCIPAIS.filter((c) => String(dados[c.chave] ?? "").trim() !== "").length;
   const pct = Math.round((preenchidos / CAMPOS_PRINCIPAIS.length) * 100);
 
@@ -137,6 +140,20 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
           </div>
         </div>
       </Grupo>
+
+      {chavesExtras.length > 0 && onExtra && (
+        <Grupo titulo={`Campos personalizados (${chavesExtras.length})`} icone={<Puzzle size={13} />}>
+          <p className="mb-3 font-mono text-[10px] leading-relaxed text-mist-600">
+            Campos extras que você configurou na aba <span className="text-cyan-400">Mapeamento &amp; Prompt</span> e a IA
+            encontrou no PPI. Edite antes de gerar o Excel.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {chavesExtras.map((k) => (
+              <Campo key={k} rotulo={k} valor={extras[k]} onChange={(v) => onExtra(k, v)} />
+            ))}
+          </div>
+        </Grupo>
+      )}
 
       <Grupo titulo={`Equipamentos na EV (${dados.equipamentos.length})`} icone={<Wrench size={13} />}>
         {dados.equipamentos.length === 0 ? (

@@ -65,6 +65,7 @@ npm run preview    # serve o build localmente
 
 - ✅ Upload do PPI por **drag & drop** ou seletor de arquivo.
 - ✅ Template `.xlsx` opcional (passo 02) — usa a aba `NDD` automaticamente; sem template, aplica o **modelo padrão embutido**.
+- ✅ **Página Mapeamento & Prompt**: edite em qual célula cada campo cai, adicione campos novos, valores fixos, formatação BR (ponto → vírgula) e as instruções da IA — com preview do prompt final montado automaticamente.
 - ✅ Extração com **rastreabilidade** (página/item de origem de cada campo).
 - ✅ **Raio-X editável**: todos os campos podem ser corrigidos antes de gerar o Excel.
 - ✅ **Console de debug completo**: pipeline em etapas, linha do tempo, prompt, requisição, resposta bruta e JSON.
@@ -90,6 +91,28 @@ npm run preview    # serve o build localmente
 | `D15`      | `( X )` (nova disponibilidade) |
 | `A23:Q…`   | Tabela de equipamentos         |
 
+> ✏️ Este mapa é o **padrão de fábrica** — ele pode ser alterado na página abaixo.
+
+---
+
+## ⚙️ Página Mapeamento & Prompt
+
+Acesse pela aba **"Mapeamento & Prompt"** no topo. É aqui que você adapta a automação ao seu template real:
+
+**1. Mapa de células** — uma regra por linha:
+- **Campo**: o nome do campo no JSON que a IA devolve (ex: `site_id_cliente`). Campos novos podem ser criados livremente (ex: `tipo_torre`) — basta descrever nas instruções o que a IA deve procurar;
+- **Célula**: onde o valor será gravado (ex: `B2`). Validação de formato (`A1`, `AA12`…) com alerta visual;
+- **Valor fixo**: grava um texto literal na célula, sem extração (ex: `( X )` em `D15`);
+- **BR**: converte ponto → vírgula para números no formato brasileiro;
+- O mesmo campo pode alimentar várias células (o padrão já faz `endereco → C12 e D12`);
+- A **linha inicial da tabela de equipamentos** também é configurável (padrão: 23).
+
+**2. Instruções de extração** — as regras de domínio que vão no prompt (como ler o carimbo `SITE:`, onde fica a altura da EV etc.).
+
+**3. Prompt final** — montado **automaticamente** em tempo real: instruções + mapa de células + schema JSON dos campos usados. Nunca fica dessincronizado do que será gravado na planilha. Tem botão de copiar para testar direto no AI Studio.
+
+Tudo é salvo automaticamente no navegador (auto-save). Os **campos personalizados** que a IA devolver aparecem no Raio-X, editáveis, antes de gerar o Excel.
+
 ---
 
 ## 🛠️ Stack
@@ -110,15 +133,16 @@ npm run preview    # serve o build localmente
 src/
 ├── App.tsx                    # orquestra upload → extração → edição → download
 ├── components/
-│   ├── Header.tsx             # topo, chave API, modelo, teste de conexão
+│   ├── Header.tsx             # topo, chave API, modelo, abas Extração/Config
 │   ├── UploadZones.tsx        # drag & drop do PPI e do template
-│   ├── ExtractionPanel.tsx    # Raio-X editável dos dados
+│   ├── ExtractionPanel.tsx    # Raio-X editável dos dados (+ campos personalizados)
+│   ├── ConfigPage.tsx         # página Mapeamento & Prompt
 │   └── DebugConsole.tsx       # pipeline + console de debug em abas
 ├── lib/
 │   ├── gemini.ts              # chamada à API, retry (503), limpeza do JSON
-│   ├── prompt.ts              # prompt técnico de extração
+│   ├── mapping.ts             # mapa de células configurável + montagem do prompt
 │   └── excel.ts               # ExcelJS: template, reparo de fórmulas, preenchimento
-└── types.ts                   # contrato de dados (JSON da IA)
+└── types.ts                   # contrato de dados (JSON da IA + automação)
 ```
 
 ---

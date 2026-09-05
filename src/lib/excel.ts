@@ -2,7 +2,8 @@
 // dependendo do bundler/ambiente — cobrimos os dois formatos.
 import * as ExcelJSMod from "exceljs/dist/exceljs.min.js";
 import type { Borders, Workbook } from "exceljs";
-import type { DadosPPI, LogLevel } from "../types";
+import type { ConfigAutomacao, DadosPPI, LogLevel } from "../types";
+import { CELULA_RE } from "./mapping";
 
 const ExcelJS: any = (ExcelJSMod as any)?.default ?? (ExcelJSMod as any);
 
@@ -384,6 +385,7 @@ export interface ResultadoExcel {
 
 export async function gerarNddPreenchido(
   dados: DadosPPI,
+  cfg: ConfigAutomacao,
   templateBuffer: ArrayBuffer | null,
   log: Logger
 ): Promise<ResultadoExcel> {
@@ -424,31 +426,55 @@ export async function gerarNddPreenchido(
     n++;
   };
 
-  // ---------- 1. CABEÇALHO (mapa idêntico ao Apps Script) ----------
-  escreve("D7", dados.data_rfi);
-  escreve("C9", dados.site_id_cliente);
-  escreve("P9", dados.site_id_detentor);
-  escreve("C11", dados.latitude);
-  escreve("J11", dados.longitude);
-  escreve("C12", dados.endereco);
-  escreve("D12", dados.endereco);
-  if (dados.endereco) {
-    ["C12", "D12"].forEach((c) => (aba.getCell(c).font = { color: { argb: "FF000000" } }));
-  }
-  escreve("B13", dados.bairro || "Zona Rural");
-  escreve("I13", dados.cidade);
-  escreve("O13", dados.cep);
-  escreve("S13", dados.uf);
-  escreve("C14", dados.altura_ev || "60");
-  escreve("D14", dados.altura_ev || "60");
-  ["C14", "D14"].forEach((c) => (aba.getCell(c).font = { color: { argb: "FF000000" } }));
-  escreve("D15", "( X )");
-  log("ok", `Cabeçalho preenchido (células D7→D15): ${n} células escritas.`);
+  // ---------- 1. CAMPOS → CÉLULAS (mapa configurável pelo usuário) ----------
+  const resolverValor = (campo: string): string => {
+    switch (campo) {
+      case "site_id_cliente": return dados.site_id_cliente;
+      case "site_id_detentor": return dados.site_id_detentor;
+      case "endereco": return dados.endereco;
+      case "bairro": return dados.bairro || "Zona Rural";
+      case "cidade": return dados.cidade;
+      case "cep": return dados.cep;
+      case "uf": return dados.uf;
+      case "latitude": return dados.latitude;
+      case "longitude": return dados.longitude;
+      case "altura_ev": return dados.altura_ev || "60";
+      case "data_rfi": return dados.data_rfi;
+      default: return dados.extras?.[campo] ?? "";
+    }
+  };
 
-  // ---------- 2. TABELA DE EQUIPAMENTOS (a partir da linha 23) ----------
+  const escritas: string[] = [];
+  let ignoradas = 0;
+  cfg.mapeamento.forEach((m) => {
+    const celula = m.celula.trim().toUpperCase();
+    if (!CELULA_RE.test(celula)) {
+      ignoradas++;
+      return;
+    }
+    let valor: string = "";
+    if (m.valorFixo !== undefined && m.valorFixo !== "") {
+      valor = m.valorFixo;
+    } else if (m.campo.trim()) {
+      valor = resolverValor(m.campo.trim());
+      if (m.br && valor) valor = String(valor).replace(".", ",");
+    } else {
+      return;
+    }
+    if (valor === "") return;
+    aba.getCell(celula).value = valor;
+    n++;
+    escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
+  });
+  if (ignoradas > 0) {
+    log("warn", `${ignoradas} regra(s) do mapa ignoradas por célula inválida — confira na página Configuração.`);
+  }
+  log("ok", `Mapa de células aplicado: ${n} célula(s) escrita(s) [${escritas.slice(0, 8).join(", ")}${escritas.length > 8 ? ", …" : ""}].`);
+
+  // ---------- 2. TABELA DE EQUIPAMENTOS (linha inicial configurável) ----------
   const qtdEq = dados.equipamentos.length;
   if (qtdEq > 0) {
-    const linhaInicial = 23;
+    const linhaInicial = cfg.linhaInicialEq;
     dados.equipamentos.forEach((eq, idx) => {
       const L = linhaInicial + idx;
       escreve(`A${L}`, "TIM");
