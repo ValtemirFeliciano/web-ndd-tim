@@ -71,11 +71,47 @@ function BotaoCopiar({ texto }: { texto: string }) {
 export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jsonExtraido, promptUsado, onCopiarDiagnostico }: Props) {
   const [aba, setAba] = useState<Aba>("timeline");
   const [diagCopiado, setDiagCopiado] = useState(false);
-  const fimRef = useRef<HTMLDivElement>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
+
+  /* Seguimento de logs estilo terminal: o auto-scroll acontece APENAS dentro
+     do container de logs — nunca move a janela/página. Se o usuário rolar para
+     cima, o seguimento pausa e aparece o aviso "novos logs ↓" para retomar. */
+  const [seguindo, setSeguindo] = useState(true);
+  const [novosLogs, setNovosLogs] = useState(0);
+  const lenAnterior = useRef(logs.length);
 
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [logs.length]);
+    const el = listaRef.current;
+    if (!el) return;
+    const delta = logs.length - lenAnterior.current;
+    lenAnterior.current = logs.length;
+    if (delta > 0 && !seguindo) setNovosLogs((n) => n + delta);
+    if (delta > 0 && seguindo) {
+      el.scrollTop = el.scrollHeight;
+      setNovosLogs(0);
+    }
+  }, [logs.length, seguindo]);
+
+  const aoRolar = () => {
+    const el = listaRef.current;
+    if (!el) return;
+    const pertoDoFim = el.scrollHeight - el.scrollTop - el.clientHeight < 32;
+    setSeguindo((v) => (v === pertoDoFim ? v : pertoDoFim));
+    if (pertoDoFim) setNovosLogs(0);
+  };
+
+  const irAoFim = () => {
+    const el = listaRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    setSeguindo(true);
+    setNovosLogs(0);
+  };
+
+  useEffect(() => {
+    const el = listaRef.current;
+    if (el && aba !== "timeline") el.scrollTop = 0;
+  }, [aba]);
 
   const erros = logs.filter((l) => l.level === "error").length;
   const avisos = logs.filter((l) => l.level === "warn").length;
@@ -192,7 +228,21 @@ export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jso
       </div>
 
       {/* conteúdo */}
-      <div className="max-h-72 overflow-auto bg-ink-950/70 p-3.5 font-mono text-[11px] leading-relaxed">
+      <div className="relative">
+        {aba === "timeline" && !seguindo && novosLogs > 0 && (
+          <button
+            onClick={irAoFim}
+            className="fade-in absolute bottom-2.5 right-3.5 z-10 flex items-center gap-1.5 rounded-full border border-cyan-400/50 bg-ink-900/95 px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider text-cyan-300 shadow-[0_4px_16px_-4px_rgba(56,189,248,0.45)] transition-all hover:border-cyan-300 hover:text-cyan-200 hover:shadow-[0_6px_20px_-4px_rgba(56,189,248,0.6)]"
+          >
+            <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-cyan-300" />
+            {novosLogs} novo{novosLogs > 1 ? "s" : ""} ↓
+          </button>
+        )}
+      <div
+        ref={listaRef}
+        onScroll={aoRolar}
+        className="max-h-72 overflow-auto bg-ink-950/70 p-3.5 font-mono text-[11px] leading-relaxed"
+      >
         {aba === "timeline" ? (
           logs.length === 0 ? (
             <p className="text-mist-600">
@@ -215,7 +265,6 @@ export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jso
                   )}
                 </div>
               ))}
-              <div ref={fimRef} />
             </div>
           )
         ) : (
@@ -223,6 +272,7 @@ export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jso
             {abas.find((a) => a.id === aba)?.conteudo || "— nada por aqui ainda —"}
           </pre>
         )}
+        </div>
       </div>
     </div>
   );
