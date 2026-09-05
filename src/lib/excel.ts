@@ -127,7 +127,33 @@ function criarTemplatePadrao(): Workbook {
 /*  "Shared Formula master must exist above and or left of clone")     */
 /* ------------------------------------------------------------------ */
 
-const TIPO_FORMULA = 2; // ExcelJS CellTypes.Formula
+// Constante REAL do ExcelJS: Enums.ValueType.Formula = 6.
+// (BUG ANTERIOR: usava "2", que na verdade é ValueType.Number — por isso a
+//  varredura não enxergava NENHUMA fórmula e o reparo passava em branco.)
+// Pega o valor da própria biblioteca para nunca mais divergir; fallback 6.
+const TIPO_FORMULA: number =
+  ((ExcelJS as any).ValueType?.Formula as number | undefined) ?? 6;
+
+/**
+ * Detecção multi-caminho de célula de fórmula — nunca confia num sinal só:
+ * confere o type (6), o formato do .value ({formula | sharedFormula}) e o
+ * .model da célula. Imune a diferenças entre versões do ExcelJS.
+ */
+function ehFormula(c: any): boolean {
+  if (!c) return false;
+  if (c.type === TIPO_FORMULA) return true;
+  const v = c.value;
+  if (v && typeof v === "object") {
+    if (typeof v.formula === "string" || typeof v.sharedFormula === "string") return true;
+  }
+  try {
+    const m = c.model;
+    if (m && (typeof m.formula === "string" || typeof m.sharedFormula === "string")) return true;
+  } catch {
+    /* getter do model pode falhar em células mescladas — ignora */
+  }
+  return false;
+}
 
 function numParaCol(n: number): string {
   let s = "";
@@ -181,36 +207,56 @@ function deslocarReferencias(formula: string, dRow: number, dCol: number): strin
 }
 
 /**
- * Converte TODOS os clones de fórmulas compartilhadas em fórmulas
- * independentes (com referências recalculadas) ou em valores estáticos
- * quando não há como reconstruir a fórmula. Isso elimina a validação do
- * ExcelJS que derrubava a serialização com templates que usam fórmulas
- * arrastadas (muito comum em NDD: colunas de AEV, tilt e Resumo).
+ * NEUTRALIZA TODA fórmula compartilhada do template ANTES de gravar os dados:
+ *
+ *  - MESTRES (células com .formula): reescritas como fórmula 100% independente,
+ *    removendo os marcadores shareType/ref do grupo compartilhado.
+ *  - CLONES (células com .sharedFormula apontando o mestre): reconstruídos como
+ *    fórmula própria deslocando as referências (exatamente o que o Excel faz ao
+ *    arrastar), ou convertidos no último valor calculado quando o mestre já foi
+ *    sobrescrito no template.
+ *
+ * Sem grupos compartilhados no modelo, a validação do ExcelJS que gerava
+ * "Shared Formula master must exist above and or left of clone" fica
+ * impossível de disparar. As fórmulas continuam ATIVAS no arquivo final
+ * (o Excel recalcula ao abrir — fullCalcOnLoad).
  */
 function repararFormulasCompartilhadas(wb: Workbook, log: Logger): void {
   let mestres = 0;
   let clones = 0;
   let viraramFormula = 0;
   let viraramValor = 0;
+  let outrasTratadas = 0;
 
   wb.worksheets.forEach((aba) => {
+    let total = 0;
     const celulasFormula: any[] = [];
     aba.eachRow({ includeEmpty: false }, (linha) => {
       linha.eachCell({ includeEmpty: false }, (cel) => {
-        const c = cel as any;
-        if (c?.type === TIPO_FORMULA) celulasFormula.push(c);
+        total++;
+        if (ehFormula(cel)) celulasFormula.push(cel as any);
       });
     });
 
-    mestres += celulasFormula.filter(
-      (c) => c.value && typeof c.value === "object" && typeof c.value.formula === "string" && !c.value.sharedFormula
-    ).length;
+    if (celulasFormula.length === 0) {
+      if (total > 0) log("info", `Varredura da aba "${aba.name}": ${total} célula(s), nenhuma fórmula encontrada.`);
+      return;
+    }
 
-    const clonesDaAba = celulasFormula.filter(
-      (c) => c.value && typeof c.value === "object" && typeof c.value.sharedFormula === "string"
-    );
-    clones += clonesDaAba.length;
+    const clonesDaAba = celulasFormula.filter((c) => {
+      const v = c.value;
+      return v && typeof v === "object" && typeof v.sharedFormula === "string";
+    });
+    const mestresDaAba = celulasFormula.filter((c) => {
+      const v = c.value;
+      return (
+        v && typeof v === "object" && typeof v.formula === "string" && v.formula.length > 0 &&
+        typeof v.sharedFormula !== "string"
+      );
+    });
+    const outras = celulasFormula.length - clonesDaAba.length - mestresDaAba.length;
 
+    // 1) CLONES primeiro (enquanto os mestres ainda têm o texto da fórmula)
     clonesDaAba.forEach((cel) => {
       const v = cel.value;
       // localiza a célula-mestre (resolvendo cadeias de sharedFormula)
@@ -221,7 +267,10 @@ function repararFormulasCompartilhadas(wb: Workbook, log: Logger): void {
         vistos.add(addr);
         const c = aba.getCell(addr) as any;
         const cv = c?.value;
-        if (cv && typeof cv === "object" && typeof cv.formula === "string" && !cv.sharedFormula) {
+        if (
+          cv && typeof cv === "object" && typeof cv.formula === "string" && cv.formula.length > 0 &&
+          typeof cv.sharedFormula !== "string"
+        ) {
           mestre = c;
           break;
         }
@@ -243,21 +292,62 @@ function repararFormulasCompartilhadas(wb: Workbook, log: Logger): void {
         cel.value = { formula: nova, result: v.result };
         viraramFormula++;
       } else {
-        // sem mestre (ex.: célula-mestre sobrescrita) → mantém o valor calculado
-        cel.value = v.result ?? null;
+        // sem mestre (ex.: célula-mestre sobrescrita no template) → valor calculado
+        cel.value = v.result !== undefined ? v.result : null;
         viraramValor++;
       }
+      clones++;
     });
+
+    // 2) MESTRES → fórmula independente (remove shareType/ref do grupo)
+    mestresDaAba.forEach((c) => {
+      const v = c.value;
+      c.value = { formula: v.formula, result: v.result };
+      mestres++;
+    });
+
+    // 3) RESÍDUO: células de fórmula que não expuseram .formula/.sharedFormula
+    //    no .value (defesa contra variações internas do ExcelJS). Neutraliza
+    //    via getters da própria célula — nenhuma fórmula compartilhada sobrevive.
+    const conjuntoTratado = new Set<any>([...clonesDaAba, ...mestresDaAba]);
+    celulasFormula
+      .filter((c) => !conjuntoTratado.has(c))
+      .forEach((c) => {
+        let f: string | null = null;
+        try {
+          f = typeof c.formula === "string" && c.formula.length > 0 ? c.formula : null;
+        } catch {
+          f = null;
+        }
+        if (f) {
+          c.value = { formula: f, result: c.result };
+        } else {
+          const r = (() => {
+            try {
+              return c.result;
+            } catch {
+              return null;
+            }
+          })();
+          c.value = r !== undefined && r !== null ? r : null;
+        }
+        outrasTratadas++;
+      });
+
+    log(
+      "info",
+      `Varredura da aba "${aba.name}": ${total} célula(s) · ${mestresDaAba.length} mestre(s) · ${clonesDaAba.length} clone(s) compartilhado(s)${outras > 0 ? ` · ${outras} outra(s) fórmula(s)` : ""}.`
+    );
   });
 
   log(
     "info",
-    `Varredura de fórmulas no template: ${mestres} fórmula(s) independentes e ${clones} clone(s) de fórmula compartilhada.`
+    `Varredura concluída (detecção ValueType.Formula=${TIPO_FORMULA}): ${mestres} mestre(s), ${clones} clone(s)${outrasTratadas > 0 ? `, ${outrasTratadas} residual(is)` : ""}.`
   );
-  if (clones > 0) {
+  if (clones > 0 || mestres > 0 || outrasTratadas > 0) {
     log(
       "ok",
-      `Fórmulas compartilhadas reparadas ANTES da gravação: ${viraramFormula} clone(s) → fórmula independente (referências deslocadas como o Excel faria), ${viraramValor} → valor estático. Correção preventiva do erro "Shared Formula master" do ExcelJS.`
+      `Fórmulas compartilhadas neutralizadas ANTES da gravação: ${viraramFormula} clone(s) → fórmula independente (referências deslocadas como o Excel faria ao arrastar), ${viraramValor} clone(s) → valor estático, ${mestres} mestre(s) → fórmula independente${outrasTratadas > 0 ? `, ${outrasTratadas} residual(is) neutralizada(s)` : ""}. O erro "Shared Formula master" não pode mais ocorrer.`
     );
   }
 }
@@ -269,8 +359,10 @@ function achatarFormulas(wb: Workbook): number {
     aba.eachRow({ includeEmpty: false }, (linha) => {
       linha.eachCell({ includeEmpty: false }, (cel) => {
         const c = cel as any;
-        if (c?.type === TIPO_FORMULA && c.value && typeof c.value === "object") {
-          c.value = c.value.result ?? null;
+        if (ehFormula(c)) {
+          const v = c.value;
+          const resultado = v && typeof v === "object" ? v.result : undefined;
+          c.value = resultado !== undefined ? resultado : null;
           n++;
         }
       });
