@@ -1,9 +1,22 @@
-import ExcelJS from "exceljs/dist/exceljs.min.js";
+// Interop reforçado: o bundle UMD do ExcelJS pode chegar como { default: ... }
+// dependendo do bundler/ambiente — cobrimos os dois formatos.
+import * as ExcelJSMod from "exceljs/dist/exceljs.min.js";
+import type { Borders, Workbook } from "exceljs";
 import type { DadosPPI, LogLevel } from "../types";
+
+const ExcelJS: any = (ExcelJSMod as any)?.default ?? (ExcelJSMod as any);
+
+function garantirExcelJS() {
+  if (!ExcelJS || typeof ExcelJS.Workbook !== "function") {
+    throw new Error(
+      "A biblioteca de Excel não carregou neste navegador. Atualize a página com Ctrl+F5 (limpeza de cache) e tente novamente."
+    );
+  }
+}
 
 export type Logger = (level: LogLevel, msg: string, detalhe?: string) => void;
 
-const BORDA_FIN: Partial<ExcelJS.Borders> = {
+const BORDA_FIN: Partial<Borders> = {
   top: { style: "thin", color: { argb: "FF9DB2C9" } },
   left: { style: "thin", color: { argb: "FF9DB2C9" } },
   bottom: { style: "thin", color: { argb: "FF9DB2C9" } },
@@ -32,7 +45,7 @@ const HEADERS_EQ = [
   "TILT MEC.", "TILT ELET.", "AEV S/ CA (m²)", "CA", "AEV C/ CA (m²)",
 ];
 
-function criarTemplatePadrao(): ExcelJS.Workbook {
+function criarTemplatePadrao(): Workbook {
   const wb = new ExcelJS.Workbook();
   wb.creator = "NDD Forge";
   wb.created = new Date();
@@ -89,7 +102,7 @@ function criarTemplatePadrao(): ExcelJS.Workbook {
     c.value = h;
     c.font = { size: 9, bold: true, color: { argb: "FFFFFFFF" } };
     c.fill = { type: "pattern", pattern: "solid", bgColor: { argb: "FF2C4F7C" } };
-    c.border = BORDA_FIN as ExcelJS.Borders;
+    c.border = BORDA_FIN as Borders;
     c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   });
   aba.getRow(22).height = 26;
@@ -98,7 +111,7 @@ function criarTemplatePadrao(): ExcelJS.Workbook {
   for (let r = 23; r <= 32; r++) {
     for (let col = 1; col <= 17; col++) {
       const c = aba.getCell(r, col);
-      c.border = BORDA_FIN as ExcelJS.Borders;
+      c.border = BORDA_FIN as Borders;
       c.alignment = { horizontal: "center", vertical: "middle" };
       if (r % 2 === 0) c.fill = { type: "pattern", pattern: "solid", bgColor: { argb: "FFF3F7FB" } };
     }
@@ -125,7 +138,8 @@ export async function gerarNddPreenchido(
   templateBuffer: ArrayBuffer | null,
   log: Logger
 ): Promise<ResultadoExcel> {
-  let wb: ExcelJS.Workbook;
+  garantirExcelJS();
+  let wb: Workbook;
   let abaUsada = "NDD (template padrão embutido)";
 
   if (templateBuffer) {
@@ -203,7 +217,17 @@ export async function gerarNddPreenchido(
   // OBS: Resumo de Equipamentos e tabela de Gabinete/VSAT NÃO são tocados,
   // preservando as fórmulas do template original — igual ao seu código.
 
-  const buffer = await wb.xlsx.writeBuffer();
+  let buffer: any;
+  try {
+    buffer = await wb.xlsx.writeBuffer();
+  } catch (e: any) {
+    throw new Error(
+      `Falha ao serializar o .xlsx (${e?.message ?? e}). Se estiver usando um template com gráficos, macros ou proteção, remova-o no passo 02 e gere com o modelo embutido.`
+    );
+  }
+  if (!buffer || (buffer as ArrayBuffer).byteLength === 0) {
+    throw new Error("O buffer do .xlsx saiu vazio. Tente novamente — se persistir, remova o template e use o modelo embutido.");
+  }
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });

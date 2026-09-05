@@ -74,6 +74,9 @@ export default function App() {
   const [processando, setProcessando] = useState(false);
   const [gerando, setGerando] = useState(false);
   const [fase, setFase] = useState("");
+  const [erroExcel, setErroExcel] = useState("");
+  const [saidaExcel, setSaidaExcel] = useState<{ url: string; nome: string; aba: string; celulas: number; kb: string } | null>(null);
+  const saidaUrlRef = useRef<string | null>(null);
 
   const log = useCallback((level: LogLevel, msg: string, detalhe?: string) => {
     const d = new Date();
@@ -153,6 +156,12 @@ export default function App() {
       return;
     }
 
+    if (saidaUrlRef.current) {
+      URL.revokeObjectURL(saidaUrlRef.current);
+      saidaUrlRef.current = null;
+    }
+    setSaidaExcel(null);
+    setErroExcel("");
     setProcessando(true);
     setLogs([]);
     setSteps(STEPS_INICIAIS);
@@ -238,16 +247,28 @@ export default function App() {
   const gerarExcel = async () => {
     if (!dados) return;
     setGerando(true);
+    setErroExcel("");
     log("info", template ? `Gerando Excel sobre o template "${template.nome}"…` : "Gerando Excel com o template padrão embutido…");
     try {
       const r = await gerarNddPreenchido(dados, template?.buffer ?? null, log);
+      if (!r.blob || r.blob.size === 0) {
+        throw new Error("O arquivo gerado saiu vazio — copie o log da aba 'Linha do tempo' e tente sem o template.");
+      }
+      if (saidaUrlRef.current) URL.revokeObjectURL(saidaUrlRef.current);
+      const url = URL.createObjectURL(r.blob);
+      saidaUrlRef.current = url;
+      setSaidaExcel({ url, nome: r.nomeArquivo, aba: r.abaUsada, celulas: r.celulasEscritas, kb: formatarBytes(r.blob.size) });
       baixarBlob(r.blob, r.nomeArquivo);
-      log("ok", `Download iniciado: ${r.nomeArquivo} · aba "${r.abaUsada}" · ${r.celulasEscritas} células escritas. Resumo/Gabinete preservados.`);
+      log("ok", `Download iniciado: ${r.nomeArquivo} · aba "${r.abaUsada}" · ${r.celulasEscritas} células · ${formatarBytes(r.blob.size)}. Resumo/Gabinete preservados.`);
     } catch (e: any) {
       const msg = e?.message ?? String(e);
-      log("error", /load|parse|Can't find end of central directory/i.test(msg)
-        ? `Não foi possível abrir o template ("${template?.nome}"): arquivo .xlsx corrompido ou protegido por senha. Remova o template e use o modelo embutido.`
-        : msg);
+      console.error("[NDDForge] Falha ao gerar o Excel:", e);
+      const amigavel =
+        template && /load|parse|central directory|invalid|unsupported/i.test(msg)
+          ? `Não foi possível abrir o template ("${template.nome}"): arquivo corrompido, protegido por senha ou com recursos que a biblioteca não lê (gráficos, tabela dinâmica, macros). Remova o template no passo 02 e gere com o modelo embutido.`
+          : msg;
+      setErroExcel(amigavel);
+      log("error", `Falha ao gerar o .xlsx: ${amigavel}`);
     } finally {
       setGerando(false);
     }
@@ -380,6 +401,45 @@ export default function App() {
                 >
                   <FileJson2 size={14} /> Baixar JSON da extração
                 </button>
+
+                {erroExcel && (
+                  <div className="fade-in rounded border border-err-500/60 bg-err-500/10 p-3.5" role="alert">
+                    <p className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-err-400">
+                      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-err-400" />
+                      falha ao gerar o .xlsx
+                    </p>
+                    <p className="mt-1.5 font-mono text-[11px] leading-snug text-err-400/90">{erroExcel}</p>
+                    <p className="mt-1.5 font-mono text-[10px] text-mist-500">
+                      stack completa no console do navegador (F12 → Console) · timeline na aba de debug
+                    </p>
+                  </div>
+                )}
+
+                {saidaExcel && (
+                  <div className="fade-in rounded border border-ok-500/60 bg-ok-500/10 p-3.5">
+                    <div className="flex items-start gap-3">
+                      <Download size={18} className="mt-0.5 shrink-0 text-ok-400" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-xs font-semibold text-ok-400" title={saidaExcel.nome}>
+                          {saidaExcel.nome}
+                        </p>
+                        <p className="mt-0.5 font-mono text-[10px] text-mist-500">
+                          {saidaExcel.celulas} células escritas · aba "{saidaExcel.aba}" · {saidaExcel.kb}
+                        </p>
+                      </div>
+                    </div>
+                    <a
+                      href={saidaExcel.url}
+                      download={saidaExcel.nome}
+                      className="mt-2.5 flex items-center justify-center gap-2 rounded border border-ok-500/60 bg-ok-500/15 px-3 py-2 font-display text-xs font-bold uppercase tracking-wide text-ok-400 transition-colors hover:bg-ok-500/25"
+                    >
+                      <Download size={13} /> Baixar novamente
+                    </a>
+                    <p className="mt-1.5 text-center font-mono text-[9px] uppercase tracking-wider text-mist-600">
+                      o download automático já começou — se o navegador bloqueou, clique acima
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
