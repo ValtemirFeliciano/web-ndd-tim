@@ -37,6 +37,30 @@ export interface DadosPPI {
   data_rfi: string;
   rastreabilidade: Rastreabilidade;
   equipamentos: Equipamento[];
+  /** Campos personalizados adicionados pelo usuário na página de Configuração */
+  extras?: Record<string, string>;
+}
+
+/** Uma regra do mapa de células: campo do JSON → célula da planilha. */
+export interface CampoMapeamento {
+  id: string;
+  /** nome do campo no JSON devolvido pela IA (ex.: "site_id_cliente"); vazio se for valor fixo */
+  campo: string;
+  /** referência da célula de destino (ex.: "C9") */
+  celula: string;
+  /** converte ponto decimal em vírgula antes de gravar (formato pt-BR) */
+  br?: boolean;
+  /** se preenchido, grava este texto literal na célula (ignora o campo) */
+  valorFixo?: string;
+}
+
+/** Tudo o que o usuário personaliza na página de Configuração. */
+export interface ConfigAutomacao {
+  /** instruções de domínio injetadas no prompt da IA */
+  instrucoes: string;
+  mapeamento: CampoMapeamento[];
+  /** linha da planilha onde começa a tabela de equipamentos */
+  linhaInicialEq: number;
 }
 
 export type LogLevel = "info" | "ok" | "warn" | "error";

@@ -1,4 +1,3 @@
-import { PROMPT_EXTRACAO } from "./prompt";
 import type { ArquivoInfo, DadosPPI, Equipamento, LogLevel } from "../types";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
@@ -117,6 +116,22 @@ export function normalizarDados(bruto: any, log: Logger): DadosPPI {
     },
     equipamentos,
   };
+
+  // campos personalizados (adicionados pelo usuário na página de Configuração)
+  const FIXOS = new Set([
+    "site_id_cliente", "site_id_detentor", "endereco", "bairro", "cidade", "cep", "uf",
+    "latitude", "longitude", "altura_ev", "data_rfi", "rastreabilidade", "equipamentos",
+  ]);
+  const extras: Record<string, string> = {};
+  Object.keys(bruto ?? {}).forEach((k) => {
+    if (FIXOS.has(k)) return;
+    const v = bruto[k];
+    if (v !== null && v !== undefined && typeof v !== "object") extras[k] = s(v);
+  });
+  if (Object.keys(extras).length > 0) {
+    dados.extras = extras;
+    log("info", `Campo(s) personalizado(s) capturado(s): ${Object.keys(extras).join(", ")}.`);
+  }
   return dados;
 }
 
@@ -163,6 +178,7 @@ export async function extrairDoPdf(
   apiKey: string,
   modelo: string,
   arquivo: ArquivoInfo,
+  prompt: string,
   log: Logger
 ): Promise<ResultadoGemini> {
   const inicio = performance.now();
@@ -174,18 +190,18 @@ export async function extrairDoPdf(
   const payload = {
     contents: [
       {
-        parts: [{ text: PROMPT_EXTRACAO }, { inline_data: { mime_type: arquivo.mime, data: arquivo.base64 } }],
+        parts: [{ text: prompt }, { inline_data: { mime_type: arquivo.mime, data: arquivo.base64 } }],
       },
     ],
     generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
   };
 
   const rawRequest = JSON.stringify(
-    { ...payload, contents: [{ parts: [{ text: PROMPT_EXTRACAO.slice(0, 220) + " …" }, { inline_data: { mime_type: arquivo.mime, data: `«base64 omitido — ${(arquivo.base64.length / 1024).toFixed(0)}KB»` } }] }] },
+    { ...payload, contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: arquivo.mime, data: `«base64 omitido — ${(arquivo.base64.length / 1024).toFixed(0)}KB»` } }] }] },
     null,
     2
   );
-  log("info", `Payload montado: prompt (${PROMPT_EXTRACAO.length} chars) + PDF em base64 (${(arquivo.base64.length / 1024).toFixed(0)}KB, mime ${arquivo.mime}).`);
+  log("info", `Payload montado: prompt (${prompt.length} chars) + PDF em base64 (${(arquivo.base64.length / 1024).toFixed(0)}KB, mime ${arquivo.mime}).`);
 
   const url = `${BASE}/models/${modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
