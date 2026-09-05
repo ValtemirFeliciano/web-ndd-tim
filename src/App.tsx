@@ -77,6 +77,7 @@ export default function App() {
   const [erroExcel, setErroExcel] = useState("");
   const [saidaExcel, setSaidaExcel] = useState<{ url: string; nome: string; aba: string; celulas: number; kb: string } | null>(null);
   const saidaUrlRef = useRef<string | null>(null);
+  const consoleRef = useRef<HTMLDivElement>(null);
 
   const log = useCallback((level: LogLevel, msg: string, detalhe?: string) => {
     const d = new Date();
@@ -169,6 +170,11 @@ export default function App() {
     setRawResponse("");
     setFase("Preparando arquivo…");
     log("info", `═══ Nova extração iniciada · arquivo: ${ppi.nome} · modelo: ${modelo} ═══`);
+
+    // leva a tela até o console de debug para acompanhar o pipeline ao vivo
+    setTimeout(() => {
+      consoleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 150);
 
     try {
       marcarStep("arquivo", "running");
@@ -550,7 +556,7 @@ export default function App() {
             )
           )}
 
-          <div className={pronto ? "rise-in" : "rise-in"} style={{ animationDelay: "0.2s" }}>
+          <div ref={consoleRef} className={pronto ? "rise-in" : "rise-in"} style={{ animationDelay: "0.2s" }}>
             <DebugConsole
               steps={steps}
               logs={logs}
