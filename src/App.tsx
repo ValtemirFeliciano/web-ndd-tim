@@ -519,7 +519,7 @@ export default function App() {
           {/* mapa de células */}
           <div className="rise-in tick-panel rounded-md p-4" style={{ animationDelay: "0.24s" }}>
             <p className="mb-2.5 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-mist-500">
-              <Braces size={11} className="text-amber-500" /> mapa de células.
+              <Braces size={11} className="text-amber-500" />  mapa de células → igual ao seu Apps Script
             </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px]">
               {[
