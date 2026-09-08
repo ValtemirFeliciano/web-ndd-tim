@@ -1,0 +1,186 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-ink-950: #07101d;
+  --color-ink-900: #0a1626;
+  --color-ink-850: #0d1c30;
+  --color-ink-800: #10233b;
+  --color-ink-700: #16304e;
+  --color-ink-600: #1e3a5f;
+  --color-ink-500: #2c4f7c;
+
+  --color-mist-100: #eaf3ff;
+  --color-mist-300: #b7cbe4;
+  --color-mist-500: #8fa8c7;
+  --color-mist-600: #6d87a8;
+
+  --color-amber-400: #ffc65c;
+  --color-amber-500: #ffb224;
+  --color-amber-600: #e89a0c;
+
+  --color-cyan-300: #7dd8f7;
+  --color-cyan-400: #38bdf8;
+  --color-cyan-500: #16a5dc;
+
+  --color-ok-400: #34d399;
+  --color-ok-500: #10b981;
+  --color-warn-400: #fbbf24;
+  --color-err-400: #f87171;
+  --color-err-500: #ef4444;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-ink-900);
+  color: var(--color-mist-100);
+  min-height: 100vh;
+}
+
+/* ---------- fundo blueprint em camadas ---------- */
+.blueprint-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-color: var(--color-ink-900);
+  background-image:
+    radial-gradient(ellipse 90% 60% at 15% -10%, rgba(56, 189, 248, 0.09), transparent 60%),
+    radial-gradient(ellipse 70% 50% at 95% 110%, rgba(255, 178, 36, 0.07), transparent 55%),
+    linear-gradient(rgba(56, 189, 248, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.055) 1px, transparent 1px),
+    linear-gradient(rgba(56, 189, 248, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.028) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 96px 96px, 96px 96px, 24px 24px, 24px 24px;
+  animation: grid-drift 90s linear infinite;
+}
+
+@keyframes grid-drift {
+  from { background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0; }
+  to   { background-position: 0 0, 0 0, 96px 96px, 96px 96px, 24px 24px, 24px 24px; }
+}
+
+.blueprint-vignette {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse 120% 90% at 50% 20%, transparent 55%, rgba(5, 12, 22, 0.65) 100%);
+}
+
+/* ---------- painel com marcas de mira nos cantos ---------- */
+.tick-panel {
+  position: relative;
+  background: linear-gradient(160deg, rgba(16, 35, 59, 0.92), rgba(13, 28, 48, 0.94));
+  border: 1px solid var(--color-ink-600);
+  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.8);
+  transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+}
+.tick-panel::before,
+.tick-panel::after {
+  content: "+";
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--color-cyan-400);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.tick-panel::before { top: -7px; left: -5px; }
+.tick-panel::after  { bottom: -8px; right: -5px; }
+.tick-panel:hover {
+  border-color: var(--color-ink-500);
+  box-shadow: 0 14px 34px -16px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(56, 189, 248, 0.08);
+}
+.tick-panel.panel-hot:hover { border-color: rgba(255, 178, 36, 0.45); }
+
+/* ---------- animações de entrada ---------- */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise-in { animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.fade-in { animation: fade-in 0.4s ease both; }
+
+/* ---------- radar de processamento ---------- */
+@keyframes radar-spin {
+  to { transform: rotate(360deg); }
+}
+.radar-sweep {
+  animation: radar-spin 1.6s linear infinite;
+  background: conic-gradient(from 0deg, rgba(255, 178, 36, 0) 0deg, rgba(255, 178, 36, 0) 250deg, rgba(255, 178, 36, 0.9) 345deg, #ffc65c 360deg);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.72); }
+}
+.pulse-dot { animation: pulse-dot 1.3s ease-in-out infinite; }
+
+@keyframes blink-caret {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.blink-caret { animation: blink-caret 1s step-end infinite; }
+
+/* linha do pipeline "energizada" */
+@keyframes flow-dash {
+  to { background-position: 0 16px; }
+}
+.flow-line-active {
+  background-image: linear-gradient(to bottom, var(--color-amber-500) 55%, transparent 45%);
+  background-size: 2px 8px;
+  background-repeat: repeat-y;
+  animation: flow-dash 0.6s linear infinite;
+}
+
+/* ---------- scrollbars ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-ink-600) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--color-ink-600); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-ink-500); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* inputs */
+.field-input {
+  width: 100%;
+  background: rgba(7, 16, 29, 0.7);
+  border: 1px solid var(--color-ink-600);
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--color-mist-100);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.field-input:focus {
+  outline: none;
+  border-color: var(--color-cyan-400);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+.field-input.input-empty {
+  border-style: dashed;
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+select.field-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238fa8c7' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
