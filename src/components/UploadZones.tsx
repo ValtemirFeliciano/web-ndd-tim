@@ -1,6 +1,7 @@
 import { useRef, useState, type DragEvent } from "react";
-import { FileSpreadsheet, FileText, UploadCloud, X } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, UploadCloud, X } from "lucide-react";
 import type { ArquivoInfo, TemplateInfo } from "../types";
+import { baixarTemplatePadrao } from "../lib/excel";
 
 export function formatarBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -144,6 +145,19 @@ export default function UploadZones(props: Props) {
         aoRemover={props.aoRemoverTemplate}
         desabilitado={props.processando}
       />
+      <button
+        onClick={async () => {
+          try {
+            await baixarTemplatePadrao();
+          } catch (e: any) {
+            alert(`Erro ao baixar template: ${e.message}`);
+          }
+        }}
+        className="flex w-full items-center justify-center gap-2 rounded border border-cyan-500/40 bg-cyan-400/5 px-4 py-2.5 font-display text-xs font-semibold uppercase tracking-wide text-cyan-300 transition-all hover:border-cyan-400 hover:bg-cyan-400/10"
+      >
+        <Download size={14} />
+        Baixar template padrão para editar
+      </button>
     </div>
   );
 }
