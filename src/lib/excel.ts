@@ -481,8 +481,13 @@ export async function gerarNddPreenchido(
       valor = m.valorFixo;
     } else if (m.transformacao && TRANSFORMACOES[m.transformacao]) {
       // Aplicar transformação (ex: "area_base" calcula nx_base × di_base)
-      valor = TRANSFORMACOES[m.transformacao](dados);
-      log("info", `Transformação "${m.transformacao}" aplicada → ${celula}="${valor}"`);
+      log("info", `Aplicando transformação "${m.transformacao}" para célula ${celula}...`);
+      valor = TRANSFORMACOES[m.transformacao](dados, log);
+      if (valor) {
+        log("ok", `Transformação "${m.transformacao}" aplicada com sucesso → ${celula}="${valor}"`);
+      } else {
+        log("warn", `Transformação "${m.transformacao}" retornou vazio para célula ${celula}. Verifique se nx_base e di_base foram extraídos corretamente.`);
+      }
     } else if (m.campo.trim()) {
       valor = resolverValor(m.campo.trim());
       if (m.br && valor) valor = String(valor).replace(".", ",");

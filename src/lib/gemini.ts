@@ -108,6 +108,8 @@ export function normalizarDados(bruto: any, log: Logger): DadosPPI {
     longitude: s(bruto.longitude),
     altura_ev: s(bruto.altura_ev) || "60",
     data_rfi: s(bruto.data_rfi),
+    nx_base: s(bruto.nx_base),
+    di_base: s(bruto.di_base),
     rastreabilidade: {
       ...(typeof bruto?.rastreabilidade === "object" && bruto.rastreabilidade !== null ? bruto.rastreabilidade : {}),
       origem_site_id: s(bruto?.rastreabilidade?.origem_site_id),
@@ -120,7 +122,7 @@ export function normalizarDados(bruto: any, log: Logger): DadosPPI {
   // campos personalizados (adicionados pelo usuário na página de Configuração)
   const FIXOS = new Set([
     "site_id_cliente", "site_id_detentor", "endereco", "bairro", "cidade", "cep", "uf",
-    "latitude", "longitude", "altura_ev", "data_rfi", "rastreabilidade", "equipamentos",
+    "latitude", "longitude", "altura_ev", "data_rfi", "nx_base", "di_base", "rastreabilidade", "equipamentos",
   ]);
   const extras: Record<string, string> = {};
   Object.keys(bruto ?? {}).forEach((k) => {
@@ -132,6 +134,12 @@ export function normalizarDados(bruto: any, log: Logger): DadosPPI {
     dados.extras = extras;
     log("info", `Campo(s) personalizado(s) capturado(s): ${Object.keys(extras).join(", ")}.`);
   }
+  
+  // Log específico para campos de base de concreto
+  if (dados.nx_base || dados.di_base) {
+    log("info", `Base de concreto extraída: nx_base="${dados.nx_base}", di_base="${dados.di_base}"`);
+  }
+  
   return dados;
 }
 
