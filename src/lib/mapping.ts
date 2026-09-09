@@ -39,13 +39,11 @@ function mapeamentoPadrao(): CampoMapeamento[] {
     { id: novoId(), campo: "site_id_detentor", celula: "P9" },
     { id: novoId(), campo: "latitude", celula: "C11" },
     { id: novoId(), campo: "longitude", celula: "J11" },
-    { id: novoId(), campo: "endereco", celula: "C12" },
     { id: novoId(), campo: "endereco", celula: "D12" },
     { id: novoId(), campo: "bairro", celula: "B13" },
     { id: novoId(), campo: "cidade", celula: "I13" },
     { id: novoId(), campo: "cep", celula: "O13" },
     { id: novoId(), campo: "uf", celula: "S13" },
-    { id: novoId(), campo: "altura_ev", celula: "C14" },
     { id: novoId(), campo: "altura_ev", celula: "D14" },
     { id: novoId(), campo: "", celula: "D15", valorFixo: "( X )" },
   ];
@@ -54,14 +52,14 @@ function mapeamentoPadrao(): CampoMapeamento[] {
 /** Aliases padrão para mapear nomes de colunas do PDF para o sistema */
 function aliasesPadrao(): AliasColuna[] {
   return [
-    { id: novoId(), campoSistema: "comprimento", aliasPdf: "L" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "DIMENSÕES" },
     { id: novoId(), campoSistema: "comprimento", aliasPdf: "Length" },
     { id: novoId(), campoSistema: "comprimento", aliasPdf: "H" },
     { id: novoId(), campoSistema: "comprimento", aliasPdf: "Height" },
-    { id: novoId(), campoSistema: "largura", aliasPdf: "W" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Width" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Larg" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "P" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "PDIMENSÕES" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "Prof" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "Depth" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "D" },
@@ -70,12 +68,10 @@ function aliasesPadrao(): AliasColuna[] {
     { id: novoId(), campoSistema: "qtde", aliasPdf: "Qtd" },
     { id: novoId(), campoSistema: "qtde", aliasPdf: "Qtd." },
     { id: novoId(), campoSistema: "qtde", aliasPdf: "Qty" },
-    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Tipo" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Tipo_de_antena" },
     { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Equipment" },
-    { id: novoId(), campoSistema: "fabricante", aliasPdf: "Fab" },
-    { id: novoId(), campoSistema: "fabricante", aliasPdf: "Manufacturer" },
     { id: novoId(), campoSistema: "modelo", aliasPdf: "Model" },
-    { id: novoId(), campoSistema: "modelo", aliasPdf: "Mod" },
+    { id: novoId(), campoSistema: "modelo", aliasPdf: "modelo" },
   ];
 }
 
@@ -86,7 +82,8 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
 3. Extraia: ENDEREÇO COMPLETO, BAIRRO, CIDADE, CEP (somente dígitos), UF (sigla com 2 letras),
    COORDENADAS em graus decimais (ex: -22.906847, sem símbolos ° ou letras N/S/E/W) e DATA_RFI (formato dd/mm/aaaa).
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento, mantendo os valores de AEV
-   EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065).
+   EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065),
+   REGRA CRÍTICA: O tipo de antena MW só vem a coluna Profundidade, se o tipo de antena for MW so trazer profundidade.
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
@@ -199,7 +196,7 @@ export function montarPromptFinal(cfg: ConfigAutomacao): string {
   const schemaCampos = camposDoSchema.map((c) => `  "${c}": "",`).join("\n");
 
   return `Você é um engenheiro de telecomunicações sênior analisando este Projeto Executivo (PPI) em PDF.
-Extraia os dados técnicos com base no carimbo, desenhos, legendas e tabelas (foco nas páginas 1, 2 e 3).
+Extraia os dados técnicos com base no carimbo, desenhos, legendas e tabelas (foco nas páginas 1, 2, 3 e 9).
 
 INSTRUÇÕES DE EXTRAÇÃO:
 ${cfg.instrucoes.trim() || "(nenhuma instrução adicional)"}
@@ -221,7 +218,8 @@ ${schemaCampos || '  "site_id_cliente": "",'}
   "rastreabilidade": {
     "origem_site_id": "Páginas 1, 2 e 3 — carimbo SITE",
     "origem_altura_torre": "Página 2 item 03 e Página 3 elevação",
-    "origem_equipamentos": "Página 3 — tabela de carregamento"
+    "origem_equipamentos": "Página 3  — tabela de carregamento"
+    "base_em_concreto":   "Página 2 e 9  — LEGENDA da Planta Civil/Planta Baixo/Radier"
   },
   "equipamentos": [
     {
