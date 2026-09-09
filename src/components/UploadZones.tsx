@@ -66,15 +66,15 @@ function ZonaDrop({ titulo, descricao, aceite, obrigatorio, arquivo, aoEscolher,
           <span className="font-mono text-[10px] uppercase tracking-wider text-mist-600">{descricao}</span>
         </button>
       ) : (
-        <div className="fade-in flex items-center gap-3 rounded border border-ok-500/35 bg-ok-500/8 px-3 py-3">
+        <div className="fade-in flex min-w-0 items-center gap-3 overflow-hidden rounded border border-ok-500/35 bg-ok-500/8 px-3 py-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded bg-ink-800 text-cyan-300">
             {icone === "pdf" ? <FileText size={19} /> : <FileSpreadsheet size={19} />}
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate font-mono text-xs font-medium text-mist-100" title={arquivo.nome}>
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <p className="truncate break-all font-mono text-xs font-medium text-mist-100" title={arquivo.nome}>
               {arquivo.nome}
             </p>
-            <p className="font-mono text-[10px] uppercase tracking-wider text-ok-400">
+            <p className="truncate font-mono text-[10px] uppercase tracking-wider text-ok-400">
               carregado · {formatarBytes(arquivo.tamanho)} ✓
             </p>
           </div>
