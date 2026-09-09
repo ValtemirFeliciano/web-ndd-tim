@@ -205,7 +205,7 @@ CAMPOS A EXTRAIR:
 ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 
 TABELA DE EQUIPAMENTOS: extraia um objeto por equipamento (tabela de carregamento, normalmente na página 3).
-Colunas: OPERADORA, SITUAÇÃO, TIPO, FABRICANTE, MODELO, BANDA, QTDE, AZIMUTE, COMPRIMENTO, LARGURA, PROFUNDIDADE, RAD CENTER, TILT MEC., TILT ELET., AEV S/ CA, CA, AEV C/ CA.
+Colunas: OPERADORA, SITUAÇÃO, TIPO, MODELO, BANDA, QTDE, AZIMUTE, COMPRIMENTO, LARGURA, PROFUNDIDADE, RAD CENTER, TILT MEC., TILT ELET., AEV S/ CA, CA, AEV C/ CA.
 Mantenha os AEV com PONTO decimal (ex: 0.888 e 1.065), exatamente como no relatório.
 
 REGRAS FINAIS:
@@ -224,7 +224,6 @@ ${schemaCampos || '  "site_id_cliente": "",'}
   "equipamentos": [
     {
       "tipo_equipamento": "",
-      "fabricante": "",
       "modelo": "",
       "qtde": "",
       "azimute": "",
