@@ -562,12 +562,20 @@ export async function gerarNddPreenchido(
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const siteId = (dados.site_id_cliente || dados.site_id_detentor || "SITE").replace(/[^\w-]+/g, "_");
-  const hoje = new Date();
-  const stamp = `${String(hoje.getDate()).padStart(2, "0")}${String(hoje.getMonth() + 1).padStart(2, "0")}${hoje.getFullYear()}`;
+
+  // Gerar nome do arquivo seguindo o padrão: [NDD] WINITY_{ID_OPERADORA}_{ID_WINITY}_{CIDADE}_{ID_OPERADORA}
+  const idOperadora = dados.site_id_cliente || "SEM_ID_OPERADORA";
+  const idWinity = dados.site_id_detentor || "SEM_ID_WINITY";
+  const cidade = dados.cidade || "SEM_CIDADE";
+
+  // Sanitizar para uso em nome de arquivo (remover caracteres inválidos)
+  const sanitizar = (str: string) => str.replace(/[<>:"/\\|?*]/g, "_").trim();
+
+  const nomeArquivo = `[NDD] WINITY_${sanitizar(idOperadora)}_${sanitizar(idWinity)}_${sanitizar(cidade)}_${sanitizar(idOperadora)}.xlsx`;
+
   return {
     blob,
-    nomeArquivo: `NDD_${siteId}_${stamp}.xlsx`,
+    nomeArquivo,
     abaUsada,
     celulasEscritas: n,
   };
@@ -600,7 +608,7 @@ export async function baixarTemplatePadrao(): Promise<void> {
   } catch {
     // arquivo não existe, gerar embutido
   }
-  
+
   // Fallback: gerar template embutido
   const wb = criarTemplatePadrao();
   const buffer = await wb.xlsx.writeBuffer();
