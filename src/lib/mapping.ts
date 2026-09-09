@@ -61,16 +61,17 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    COORDENADAS em graus decimais (ex: -22.906847, sem símbolos ° ou letras N/S/E/W) e DATA_RFI (formato dd/mm/aaaa).
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento, mantendo os valores de AEV
    EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065).
-5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
+   -REGRA CRÍTICA: O tipo de antena MW só vem a coluna Profundidade, se o tipo de antena for MW so trazer profundidade
+5. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
+6. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.
+ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
    - Extraia as DIMENSÕES de cada base (ex: "1,00x1,00" ou "3,00x5,00") → campo "di_base"
    - IMPORTANTE: Extraia APENAS a quantidade e as dimensões individuais. O cálculo da área total será feito automaticamente.
    - Exemplos:
      * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
-     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,00X5,00m)" → nx_base="1", di_base="3,00x5,00"
-6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
-7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
+     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,00X5,00m)" → nx_base="1", di_base="3,00x5,00"`;
 
 export const CONFIG_PADRAO: ConfigAutomacao = {
   instrucoes: INSTRUCOES_PADRAO,
