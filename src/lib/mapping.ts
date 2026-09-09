@@ -20,7 +20,6 @@ export const DESCRICOES_CAMPOS: Record<string, string> = {
   latitude: "latitude em graus decimais (ex: -22.906847, sem ° nem N/S)",
   longitude: "longitude em graus decimais (ex: -43.172897, sem ° nem E/W)",
   altura_ev: 'altura da EV — item 03 da legenda ou cota na elevação da torre (ex: "60")',
-  data_rfi: "data do RFI no formato dd/mm/aaaa",
   nx_base: "quantidade de bases de concreto (ex: 2)",
   di_base: 'dimensões da base (ex: "1,00x1,00" ou "3,00x5,00")',
 };
@@ -36,7 +35,6 @@ const novoId = () => `m_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 function mapeamentoPadrao(): CampoMapeamento[] {
   // Réplica exata do mapa de células do Apps Script original (preencherPlanilha).
   return [
-    { id: novoId(), campo: "data_rfi", celula: "D7" },
     { id: novoId(), campo: "site_id_cliente", celula: "C9" },
     { id: novoId(), campo: "site_id_detentor", celula: "P9" },
     { id: novoId(), campo: "latitude", celula: "C11" },
@@ -230,15 +228,15 @@ ${schemaCampos || '  "site_id_cliente": "",'}
       "tipo_equipamento": "",
       "fabricante": "",
       "modelo": "",
-      "qtde": 1,
+      "qtde": "",
       "azimute": "",
       "comprimento": "",
       "largura": "",
       "profundidade": "",
       "rad_center": "",
-      "aev_sem_ca": "0.888",
-      "ca": "1.2",
-      "aev_com_ca": "1.065"
+      "aev_sem_ca": "",
+      "ca": "",
+      "aev_com_ca": ""
     }
   ]
 }`;
