@@ -154,6 +154,16 @@ export function montarPromptFinal(cfg: ConfigAutomacao): string {
     if (!camposDoSchema.includes(campo)) camposDoSchema.push(campo);
   });
 
+  // Garantir que nx_base e di_base estejam sempre no schema para cálculo de área
+  if (!camposDoSchema.includes("nx_base")) {
+    camposDoSchema.push("nx_base");
+    linhasMapa.push(`- "nx_base" → (usado em transformação) — ${DESCRICOES_CAMPOS.nx_base}`);
+  }
+  if (!camposDoSchema.includes("di_base")) {
+    camposDoSchema.push("di_base");
+    linhasMapa.push(`- "di_base" → (usado em transformação) — ${DESCRICOES_CAMPOS.di_base}`);
+  }
+
   const schemaCampos = camposDoSchema.map((c) => `  "${c}": "",`).join("\n");
 
   return `Você é um engenheiro de telecomunicações sênior analisando este Projeto Executivo (PPI) em PDF.
