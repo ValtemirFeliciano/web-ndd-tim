@@ -3,7 +3,7 @@ import {
   AlertTriangle, ArrowLeft, Check, Copy, FileCog, ListChecks, Plus,
   RotateCcw, Save, Sparkles, Table2, Trash2, Wand2,
 } from "lucide-react";
-import type { CampoMapeamento, ConfigAutomacao } from "../types";
+import type { AliasColuna, CampoMapeamento, ConfigAutomacao } from "../types";
 import {
   CAMPOS_CONHECIDOS, DESCRICOES_CAMPOS, INSTRUCOES_PADRAO,
   montarPromptFinal, validarConfig,
@@ -67,6 +67,16 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
   const remover = (id: string) => onChange({ ...cfg, mapeamento: cfg.mapeamento.filter((m) => m.id !== id) });
   const adicionar = () =>
     onChange({ ...cfg, mapeamento: [...cfg.mapeamento, { id: novoId(), campo: "", celula: "" }] });
+
+  const setAlias = (id: string, patch: Partial<AliasColuna>) => {
+    onChange({
+      ...cfg,
+      aliasesColunas: cfg.aliasesColunas.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    });
+  };
+  const removerAlias = (id: string) => onChange({ ...cfg, aliasesColunas: cfg.aliasesColunas.filter((a) => a.id !== id) });
+  const adicionarAlias = () =>
+    onChange({ ...cfg, aliasesColunas: [...cfg.aliasesColunas, { id: novoId(), campoSistema: "", aliasPdf: "" }] });
 
   const restaurarInstrucoes = () => onChange({ ...cfg, instrucoes: INSTRUCOES_PADRAO });
 
@@ -277,6 +287,100 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
           </label>
           <span className="font-mono text-[9px] text-mist-600">(colunas A→Q · OPERADORA, SITUAÇÃO, TIPO, … AEV C/ CA)</span>
         </div>
+      </Secao>
+
+      {/* ============ 1.5 ALIASES DE COLUNAS ============ */}
+      <Secao
+        titulo="Aliases de colunas (PDF → Sistema)"
+        icone={<FileCog size={15} />}
+        extra={
+          <>
+            <span className="rounded border border-ink-600 px-2 py-0.5 font-mono text-[9px] uppercase text-mist-500">
+              {cfg.aliasesColunas.length} alias(es)
+            </span>
+            <button
+              onClick={adicionarAlias}
+              className="flex items-center gap-1 rounded border border-cyan-500/60 bg-cyan-500/10 px-2.5 py-1 font-display text-[10px] font-semibold uppercase tracking-wider text-cyan-300 transition-all hover:bg-cyan-500/20"
+            >
+              <Plus size={11} /> adicionar alias
+            </button>
+          </>
+        }
+      >
+        <p className="mb-3 font-mono text-[10px] leading-relaxed text-mist-500">
+          Mapeie nomes alternativos que podem aparecer no PDF para os campos do sistema.
+          Exemplo: se o PDF usa <span className="font-mono text-cyan-300">"L"</span> em vez de{" "}
+          <span className="font-mono text-cyan-300">"altura"</span>, adicione um alias.
+        </p>
+
+        <div className="overflow-x-auto rounded border border-ink-600">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-ink-800">
+                <th className="w-8 px-2 py-2 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">#</th>
+                <th className="px-2 py-2 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">Campo no Sistema</th>
+                <th className="px-2 py-2 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">Alias no PDF</th>
+                <th className="w-10 px-2 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {cfg.aliasesColunas.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-3 py-5 text-center font-mono text-[11px] text-mist-600">
+                    nenhum alias configurado — clique em "adicionar alias" para criar
+                  </td>
+                </tr>
+              )}
+              {cfg.aliasesColunas.map((a, i) => (
+                <tr key={a.id} className="group border-t border-ink-700 transition-colors hover:bg-cyan-400/5">
+                  <td className="px-2 py-1.5 font-mono text-[10px] text-amber-500">{String(i + 1).padStart(2, "0")}</td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      list="campos-sistema"
+                      value={a.campoSistema}
+                      onChange={(e) => setAlias(a.id, { campoSistema: e.target.value })}
+                      placeholder="ex: altura"
+                      className="field-input w-full px-2 py-1 font-mono text-[11px]"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <input
+                      value={a.aliasPdf}
+                      onChange={(e) => setAlias(a.id, { aliasPdf: e.target.value })}
+                      placeholder="ex: L, Length, H"
+                      className="field-input w-full px-2 py-1 font-mono text-[11px] text-cyan-300"
+                    />
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <button
+                      onClick={() => removerAlias(a.id)}
+                      className="grid h-6 w-6 place-items-center rounded border border-ink-600 text-mist-600 opacity-40 transition-all hover:border-err-400 hover:text-err-400 group-hover:opacity-100"
+                      title="Remover alias"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <datalist id="campos-sistema">
+            <option value="altura" />
+            <option value="largura" />
+            <option value="profundidade" />
+            <option value="azimute" />
+            <option value="qtde" />
+            <option value="tipo_equipamento" />
+            <option value="fabricante" />
+            <option value="modelo" />
+          </datalist>
+        </div>
+
+        <p className="mt-2 font-mono text-[9px] leading-relaxed text-mist-600">
+          💡 <span className="text-amber-400">Dica:</span> Os aliases são aplicados durante a normalização dos dados.
+          Se o PDF usar "L" para altura, o sistema vai automaticamente mapear para o campo "altura".
+          Verifique o log completo para ver quais aliases foram aplicados.
+        </p>
       </Secao>
 
       {/* ============ 2. INSTRUÇÕES DO PROMPT ============ */}
