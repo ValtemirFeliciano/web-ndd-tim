@@ -1,4 +1,4 @@
-import type { CampoMapeamento, ConfigAutomacao } from "../types";
+import type { AliasColuna, CampoMapeamento, ConfigAutomacao } from "../types";
 
 /* ------------------------------------------------------------------ */
 /*  Mapa de células — antes vivia hardcoded em src/lib/excel.ts.       */
@@ -53,6 +53,34 @@ function mapeamentoPadrao(): CampoMapeamento[] {
   ];
 }
 
+/** Aliases padrão para mapear nomes de colunas do PDF para o sistema */
+function aliasesPadrao(): AliasColuna[] {
+  return [
+    { id: novoId(), campoSistema: "altura", aliasPdf: "L" },
+    { id: novoId(), campoSistema: "altura", aliasPdf: "Length" },
+    { id: novoId(), campoSistema: "altura", aliasPdf: "H" },
+    { id: novoId(), campoSistema: "altura", aliasPdf: "Height" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "W" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "Width" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "Larg" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "P" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Prof" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Depth" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "D" },
+    { id: novoId(), campoSistema: "azimute", aliasPdf: "Az" },
+    { id: novoId(), campoSistema: "azimute", aliasPdf: "Azim" },
+    { id: novoId(), campoSistema: "qtde", aliasPdf: "Qtd" },
+    { id: novoId(), campoSistema: "qtde", aliasPdf: "Qtd." },
+    { id: novoId(), campoSistema: "qtde", aliasPdf: "Qty" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Tipo" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Equipment" },
+    { id: novoId(), campoSistema: "fabricante", aliasPdf: "Fab" },
+    { id: novoId(), campoSistema: "fabricante", aliasPdf: "Manufacturer" },
+    { id: novoId(), campoSistema: "modelo", aliasPdf: "Model" },
+    { id: novoId(), campoSistema: "modelo", aliasPdf: "Mod" },
+  ];
+}
+
 export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    - Primeira linha (ex: MSRBS006_A) = "site_id_detentor".
    - Segunda linha (ex: SN-RRRSI4) = "site_id_cliente".
@@ -61,22 +89,22 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    COORDENADAS em graus decimais (ex: -22.906847, sem símbolos ° ou letras N/S/E/W) e DATA_RFI (formato dd/mm/aaaa).
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento, mantendo os valores de AEV
    EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065).
-   -REGRA CRÍTICA: O tipo de antena MW só vem a coluna Profundidade, se o tipo de antena for MW so trazer profundidade
-5. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
-6. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.
-ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
+5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
    - Extraia as DIMENSÕES de cada base (ex: "1,00x1,00" ou "3,00x5,00") → campo "di_base"
    - IMPORTANTE: Extraia APENAS a quantidade e as dimensões individuais. O cálculo da área total será feito automaticamente.
    - Exemplos:
      * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
-     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,00X5,00m)" → nx_base="1", di_base="3,00x5,00"`;
+     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,00X5,00m)" → nx_base="1", di_base="3,00x5,00"
+6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
+7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
 
 export const CONFIG_PADRAO: ConfigAutomacao = {
   instrucoes: INSTRUCOES_PADRAO,
   mapeamento: mapeamentoPadrao(),
   linhaInicialEq: 23,
+  aliasesColunas: aliasesPadrao(),
 };
 
 /* ------------------------------------------------------------------ */
@@ -103,6 +131,14 @@ export function carregarConfig(): ConfigAutomacao {
               }))
           : mapeamentoPadrao(),
       linhaInicialEq: Number(j.linhaInicialEq) > 0 ? Number(j.linhaInicialEq) : 23,
+      aliasesColunas:
+        Array.isArray(j.aliasesColunas) && j.aliasesColunas.length > 0
+          ? j.aliasesColunas.map((a: any) => ({
+              id: String(a.id ?? novoId()),
+              campoSistema: String(a.campoSistema ?? "").trim(),
+              aliasPdf: String(a.aliasPdf ?? "").trim(),
+            }))
+          : aliasesPadrao(),
     };
   } catch {
     return CONFIG_PADRAO;
@@ -122,6 +158,7 @@ export function resetarConfig(): ConfigAutomacao {
     instrucoes: INSTRUCOES_PADRAO,
     mapeamento: mapeamentoPadrao(),
     linhaInicialEq: 23,
+    aliasesColunas: aliasesPadrao(),
   };
   salvarConfig(c);
   return c;
