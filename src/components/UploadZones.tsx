@@ -35,7 +35,7 @@ function ZonaDrop({ titulo, descricao, aceite, obrigatorio, arquivo, aoEscolher,
   };
 
   return (
-    <div className={`tick-panel panel-hot rounded-md p-4 ${desabilitado ? "opacity-60" : ""}`}>
+    <div className={`tick-panel panel-hot min-w-0 overflow-hidden rounded-md p-4 ${desabilitado ? "opacity-60" : ""}`}>
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <h3 className="font-display text-sm font-semibold uppercase tracking-wide text-mist-100">{titulo}</h3>
         <span className={`font-mono text-[9px] uppercase tracking-[0.18em] ${obrigatorio ? "text-amber-500" : "text-mist-500"}`}>
@@ -122,7 +122,7 @@ interface Props {
 
 export default function UploadZones(props: Props) {
   return (
-    <div className="grid gap-4">
+    <div className="min-w-0 grid gap-4 overflow-hidden">
       <ZonaDrop
         titulo="01 · Relatório PPI"
         descricao="PDF do projeto executivo · máx 18 MB"
