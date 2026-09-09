@@ -1,4 +1,4 @@
-import type { ArquivoInfo, DadosPPI, Equipamento, LogLevel } from "../types";
+import type { AliasColuna, ArquivoInfo, DadosPPI, Equipamento, LogLevel } from "../types";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 export const MODELOS_PADRAO = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-pro"];
@@ -68,27 +68,64 @@ export function limparJson(texto: string, log: Logger): string {
   return t.slice(ini, fim + 1);
 }
 
+/** Aplica aliases para mapear nomes de colunas do PDF para o sistema */
+function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipIndex: number): any {
+  if (!obj || typeof obj !== "object") return obj;
+  
+  const resultado = { ...obj };
+  let aliasesAplicados = 0;
+  
+  aliases.forEach((alias) => {
+    const aliasLower = alias.aliasPdf.toLowerCase();
+    const campoSistema = alias.campoSistema;
+    
+    // Procurar pelo alias no objeto (case-insensitive)
+    for (const key of Object.keys(resultado)) {
+      if (key.toLowerCase() === aliasLower) {
+        // Se o campo do sistema ainda não existe ou está vazio, aplicar o alias
+        if (!resultado[campoSistema] || resultado[campoSistema] === "" || resultado[campoSistema] === "-") {
+          resultado[campoSistema] = resultado[key];
+          aliasesAplicados++;
+          log("info", `Equipamento #${equipIndex + 1}: alias "${alias.aliasPdf}" → "${campoSistema}"`);
+        }
+        // Remover a chave do alias para não duplicar
+        delete resultado[key];
+      }
+    }
+  });
+  
+  return resultado;
+}
+
 /** Preenche campos ausentes para o objeto ficar 100% compatível com o contrato. */
-export function normalizarDados(bruto: any, log: Logger): DadosPPI {
+export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] = []): DadosPPI {
   const s = (v: any) => (v === null || v === undefined ? "" : String(v).trim());
   const eqBrutos: any[] = Array.isArray(bruto.equipamentos) ? bruto.equipamentos : [];
   if (!Array.isArray(bruto.equipamentos)) {
     log("warn", "O campo 'equipamentos' não veio como array — tratando como lista vazia.");
   }
+  
+  if (aliases.length > 0) {
+    log("info", `Aplicando ${aliases.length} alias(es) de colunas para normalização...`);
+  }
+  
   const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
+    // Aplicar aliases antes de normalizar
+    const eComAliases = aplicarAliases(e, aliases, log, i);
+    
     const eq: Equipamento = {
-      tipo_equipamento: s(e?.tipo_equipamento ?? e?.tipo),
-      fabricante: s(e?.fabricante) || "-",
-      modelo: s(e?.modelo),
-      qtde: e?.qtde ?? e?.quantidade ?? 1,
-      azimute: s(e?.azimute) || "-",
-      altura: s(e?.altura) || "-",
-      largura: s(e?.largura) || "-",
-      profundidade: s(e?.profundidade) || "-",
-      rad_center: s(e?.rad_center ?? e?.radcenter),
-      aev_sem_ca: s(e?.aev_sem_ca ?? e?.aevSemCa),
-      ca: s(e?.ca) || "1.2",
-      aev_com_ca: s(e?.aev_com_ca ?? e?.aevComCa),
+      tipo_equipamento: s(eComAliases?.tipo_equipamento ?? eComAliases?.tipo),
+      fabricante: s(eComAliases?.fabricante) || "-",
+      modelo: s(eComAliases?.modelo),
+      qtde: eComAliases?.qtde ?? eComAliases?.quantidade ?? 1,
+      azimute: s(eComAliases?.azimute) || "-",
+      altura: s(eComAliases?.altura) || "-",
+      largura: s(eComAliases?.largura) || "-",
+      profundidade: s(eComAliases?.profundidade) || "-",
+      rad_center: s(eComAliases?.rad_center ?? eComAliases?.radcenter),
+      aev_sem_ca: s(eComAliases?.aev_sem_ca ?? eComAliases?.aevSemCa),
+      ca: s(eComAliases?.ca) || "1.2",
+      aev_com_ca: s(eComAliases?.aev_com_ca ?? eComAliases?.aevComCa),
     };
     if (!eq.tipo_equipamento && !eq.modelo) {
       log("warn", `Equipamento #${i + 1} veio sem tipo e sem modelo — pode ser linha de resumo da tabela.`);
@@ -187,6 +224,7 @@ export async function extrairDoPdf(
   modelo: string,
   arquivo: ArquivoInfo,
   prompt: string,
+  aliases: AliasColuna[],
   log: Logger
 ): Promise<ResultadoGemini> {
   const inicio = performance.now();
@@ -271,7 +309,7 @@ export async function extrairDoPdf(
     throw err;
   }
 
-  const dados = normalizarDados(bruto, log);
+  const dados = normalizarDados(bruto, log, aliases);
   const duracaoMs = Math.round(performance.now() - inicio);
   return { dados, rawRequest, rawResponse: corpo, duracaoMs, tentativas };
 }
