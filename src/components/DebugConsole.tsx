@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, CheckCircle2, Circle, Copy, Loader2, Terminal, XCircle } from "lucide-react";
+import { Check, CheckCircle2, Circle, Copy, Download, Loader2, Terminal, XCircle } from "lucide-react";
 import type { LogEntry, LogLevel, StepId, StepStatus } from "../types";
+import { logger } from "../lib/logger";
 
 const STEPS: { id: StepId; rotulo: string; detalhe: string }[] = [
   { id: "arquivo", rotulo: "Leitura do arquivo", detalhe: "PDF → base64" },
@@ -145,24 +146,34 @@ export default function DebugConsole({ steps, logs, rawRequest, rawResponse, jso
               {erros} erro{erros > 1 ? "s" : ""}
             </span>
           )}
-          {onCopiarDiagnostico && (
+          <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={async () => {
-                try {
-                  await onCopiarDiagnostico();
-                  setDiagCopiado(true);
-                  setTimeout(() => setDiagCopiado(false), 1800);
-                } catch {
-                  /* clipboard indisponível */
-                }
-              }}
-              className="ml-auto flex items-center gap-1 rounded border border-ink-500 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-mist-300 transition-colors hover:border-amber-500 hover:text-amber-400"
-              title="Copia logs, erros, stack e ambiente para a área de transferência (sem a chave da API)"
+              onClick={() => logger.exportToFile()}
+              className="flex items-center gap-1 rounded border border-amber-500/50 bg-amber-500/10 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-amber-300 transition-colors hover:bg-amber-500/20"
+              title="Baixa todos os logs como arquivo .txt"
             >
-              {diagCopiado ? <Check size={10} className="text-ok-400" /> : <Copy size={10} />}
-              {diagCopiado ? "copiado" : "diagnóstico"}
+              <Download size={10} />
+              log completo
             </button>
-          )}
+            {onCopiarDiagnostico && (
+              <button
+                onClick={async () => {
+                  try {
+                    await onCopiarDiagnostico();
+                    setDiagCopiado(true);
+                    setTimeout(() => setDiagCopiado(false), 1800);
+                  } catch {
+                    /* clipboard indisponível */
+                  }
+                }}
+                className="flex items-center gap-1 rounded border border-ink-500 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-mist-300 transition-colors hover:border-amber-500 hover:text-amber-400"
+                title="Copia logs, erros, stack e ambiente para a área de transferência (sem a chave da API)"
+              >
+                {diagCopiado ? <Check size={10} className="text-ok-400" /> : <Copy size={10} />}
+                {diagCopiado ? "copiado" : "diagnóstico"}
+              </button>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {STEPS.map((s, i) => {
