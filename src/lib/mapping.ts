@@ -85,13 +85,14 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065),
    REGRA CRÍTICA: O tipo de antena MW só vem a coluna Profundidade, se o tipo de antena for MW so trazer profundidade.
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
-   - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
+   - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO" "PARA IMPLANTAÇÃO" ou "A INSTALAR".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
    - Extraia as DIMENSÕES de cada base EXATAMENTE como aparecem no PDF → campo "di_base"
    - IMPORTANTE:
      * Extraia APENAS a quantidade e as dimensões individuais
      * Mantenha a ordem das dimensões EXATAMENTE como aparece no PDF (não inverta)
      * O cálculo da área total será feito automaticamente
+     REGRA DE EXCLUSÃO CRÍTICA: IGNORE completamente qualquer medida atrelada a "PROJEÇÃO DE BASE", "FUTURA EXPANSÃO" ou "EXPANSÃO"
    - Exemplos:
      * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
      * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,50X1,30m)" → nx_base="1", di_base="3,50x1,30"
