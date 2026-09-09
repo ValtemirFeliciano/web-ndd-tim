@@ -8,6 +8,7 @@ import ConfigPage from "./components/ConfigPage";
 import { extrairDoPdf, listarModelos, testarConexao, validarDados, MODELOS_PADRAO } from "./lib/gemini";
 import { gerarNddPreenchido, baixarBlob } from "./lib/excel";
 import { carregarConfig, salvarConfig, montarPromptFinal } from "./lib/mapping";
+import { logger } from "./lib/logger";
 import {
   EQUIPAMENTO_VAZIO,
   type ArquivoInfo, type ConfigAutomacao, type DadosPPI, type Equipamento, type LogEntry, type LogLevel,
@@ -119,6 +120,9 @@ export default function App() {
       ...prev.slice(-250),
       { id: ++logId.current, hora: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`, level, msg, detalhe },
     ]);
+    
+    // Registrar no logger global para exportação
+    logger.log(level, msg, detalhe);
   }, []);
 
   /* persistência */
@@ -359,6 +363,11 @@ export default function App() {
     log("ok", `JSON da extração salvo: ${nome}`);
   };
 
+  const baixarLogCompleto = () => {
+    logger.exportToFile();
+    log("ok", "Log completo baixado como arquivo .txt");
+  };
+
   /* ------------------------- API settings ------------------------- */
 
   const aoTestar = async () => {
@@ -511,6 +520,12 @@ export default function App() {
                   className="flex items-center justify-center gap-2 rounded-md border border-cyan-500/50 px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-wide text-cyan-300 transition-colors hover:bg-cyan-500/10"
                 >
                   <FileJson2 size={14} /> Baixar JSON da extração
+                </button>
+                <button
+                  onClick={baixarLogCompleto}
+                  className="flex items-center justify-center gap-2 rounded-md border border-amber-500/50 px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-wide text-amber-300 transition-colors hover:bg-amber-500/10"
+                >
+                  <Download size={14} /> Baixar log completo (.txt)
                 </button>
 
                 {erroExcel && (
