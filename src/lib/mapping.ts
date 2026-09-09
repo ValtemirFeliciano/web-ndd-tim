@@ -36,15 +36,18 @@ const novoId = () => `m_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 function mapeamentoPadrao(): CampoMapeamento[] {
   // Réplica exata do mapa de células do Apps Script original (preencherPlanilha).
   return [
+    { id: novoId(), campo: "data_rfi", celula: "D7" },
     { id: novoId(), campo: "site_id_cliente", celula: "C9" },
     { id: novoId(), campo: "site_id_detentor", celula: "P9" },
     { id: novoId(), campo: "latitude", celula: "C11" },
     { id: novoId(), campo: "longitude", celula: "J11" },
+    { id: novoId(), campo: "endereco", celula: "C12" },
     { id: novoId(), campo: "endereco", celula: "D12" },
     { id: novoId(), campo: "bairro", celula: "B13" },
     { id: novoId(), campo: "cidade", celula: "I13" },
     { id: novoId(), campo: "cep", celula: "O13" },
     { id: novoId(), campo: "uf", celula: "S13" },
+    { id: novoId(), campo: "altura_ev", celula: "C14" },
     { id: novoId(), campo: "altura_ev", celula: "D14" },
     { id: novoId(), campo: "", celula: "D15", valorFixo: "( X )" },
   ];
@@ -53,17 +56,17 @@ function mapeamentoPadrao(): CampoMapeamento[] {
 /** Aliases padrão para mapear nomes de colunas do PDF para o sistema */
 function aliasesPadrao(): AliasColuna[] {
   return [
-    { id: novoId(), campoSistema: "Comprimento", aliasPdf: "L" },
-    { id: novoId(), campoSistema: "Comprimento", aliasPdf: "Length" },
-    { id: novoId(), campoSistema: "Comprimento", aliasPdf: "H" },
-    { id: novoId(), campoSistema: "aComprimento", aliasPdf: "DIMENSÕES (mm)" },
-    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES (mm)" },
+    { id: novoId(), campoSistema: "altura", aliasPdf: "L" },
+    { id: novoId(), campoSistema: "altura", aliasPdf: "Length" },
+    { id: novoId(), campoSistema: "altura", aliasPdf: "H" },
+    { id: novoId(), campoSistema: "altura", aliasPdf: "Height" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "W" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Width" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Larg" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "P" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "Prof" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "Depth" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "DIMENSÕES (mm) },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "D" },
     { id: novoId(), campoSistema: "azimute", aliasPdf: "Az" },
     { id: novoId(), campoSistema: "azimute", aliasPdf: "Azim" },
     { id: novoId(), campoSistema: "qtde", aliasPdf: "Qtd" },
@@ -214,7 +217,7 @@ CAMPOS A EXTRAIR:
 ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 
 TABELA DE EQUIPAMENTOS: extraia um objeto por equipamento (tabela de carregamento, normalmente na página 3).
-Colunas: OPERADORA, SITUAÇÃO, TIPO, FABRICANTE, MODELO, BANDA, QTDE, AZIMUTE, COMPRIMENTO, LARGURA, PROFUNDIDADE, RAD CENTER, TILT MEC., TILT ELET., AEV S/ CA, CA, AEV C/ CA.
+Colunas: OPERADORA, SITUAÇÃO, TIPO, FABRICANTE, MODELO, BANDA, QTDE, AZIMUTE, ALTURA, LARGURA, PROFUNDIDADE, RAD CENTER, TILT MEC., TILT ELET., AEV S/ CA, CA, AEV C/ CA.
 Mantenha os AEV com PONTO decimal (ex: 0.888 e 1.065), exatamente como no relatório.
 
 REGRAS FINAIS:
