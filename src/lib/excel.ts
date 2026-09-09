@@ -517,7 +517,7 @@ export async function gerarNddPreenchido(
       escreve(`E${L}`, eq.modelo);
       escreve(`G${L}`, Number(eq.qtde) || eq.qtde || 1);
       escreve(`H${L}`, eq.azimute || "-");
-      escreve(`I${L}`, eq.altura || "-");
+      escreve(`I${L}`, eq.comprimento || "-");
       escreve(`J${L}`, eq.largura || "-");
       escreve(`K${L}`, eq.profundidade || "-");
       escreve(`L${L}`, eq.rad_center);
