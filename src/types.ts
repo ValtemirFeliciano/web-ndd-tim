@@ -16,6 +16,15 @@ export interface Equipamento {
   aev_com_ca: string;
 }
 
+/** Mapeamento de aliases para colunas da tabela de equipamentos */
+export interface AliasColuna {
+  id: string;
+  /** Nome da coluna no sistema (ex: "altura") */
+  campoSistema: string;
+  /** Nome alternativo que pode aparecer no PDF (ex: "L", "Length", "H") */
+  aliasPdf: string;
+}
+
 export interface Rastreabilidade {
   origem_site_id: string;
   origem_altura_torre: string;
@@ -67,6 +76,8 @@ export interface ConfigAutomacao {
   mapeamento: CampoMapeamento[];
   /** linha da planilha onde começa a tabela de equipamentos */
   linhaInicialEq: number;
+  /** aliases para mapear nomes de colunas do PDF para o sistema */
+  aliasesColunas: AliasColuna[];
 }
 
 export type LogLevel = "info" | "ok" | "warn" | "error";
