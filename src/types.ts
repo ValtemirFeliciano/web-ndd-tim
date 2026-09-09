@@ -37,6 +37,10 @@ export interface DadosPPI {
   data_rfi: string;
   rastreabilidade: Rastreabilidade;
   equipamentos: Equipamento[];
+  /** Quantidade de bases de concreto (ex: "2") */
+  nx_base?: string;
+  /** Dimensões da base (ex: "1,00x1,00") */
+  di_base?: string;
   /** Campos personalizados adicionados pelo usuário na página de Configuração */
   extras?: Record<string, string>;
 }
@@ -52,6 +56,8 @@ export interface CampoMapeamento {
   br?: boolean;
   /** se preenchido, grava este texto literal na célula (ignora o campo) */
   valorFixo?: string;
+  /** nome da função de transformação (ex.: "area_base") */
+  transformacao?: string;
 }
 
 /** Tudo o que o usuário personaliza na página de Configuração. */
