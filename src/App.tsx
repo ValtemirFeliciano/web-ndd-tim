@@ -223,8 +223,8 @@ export default function App() {
 
       marcarStep("gemini", "running");
       setFase("A IA está lendo o PPI (pode levar ~30s)…");
-      log("info", `Prompt da configuração aplicado: ${promptFinal.length} chars · ${cfg.mapeamento.length} regra(s) no mapa · tabela de equipamentos a partir da linha ${cfg.linhaInicialEq}.`);
-      const r = await extrairDoPdf(apiKey.trim(), modelo, ppi, promptFinal, log);
+      log("info", `Prompt da configuração aplicado: ${promptFinal.length} chars · ${cfg.mapeamento.length} regra(s) no mapa · ${cfg.aliasesColunas.length} alias(es) de colunas · tabela de equipamentos a partir da linha ${cfg.linhaInicialEq}.`);
+      const r = await extrairDoPdf(apiKey.trim(), modelo, ppi, promptFinal, cfg.aliasesColunas, log);
       marcarStep("gemini", "done");
       setRawRequest(r.rawRequest);
       setRawResponse(r.rawResponse);
