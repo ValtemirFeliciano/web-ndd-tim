@@ -4,6 +4,7 @@ import * as ExcelJSMod from "exceljs/dist/exceljs.min.js";
 import type { Borders, Workbook } from "exceljs";
 import type { ConfigAutomacao, DadosPPI, LogLevel } from "../types";
 import { CELULA_RE } from "./mapping";
+import { TRANSFORMACOES } from "./transformers";
 
 const ExcelJS: any = (ExcelJSMod as any)?.default ?? (ExcelJSMod as any);
 
@@ -461,6 +462,8 @@ export async function gerarNddPreenchido(
       case "longitude": return dados.longitude;
       case "altura_ev": return dados.altura_ev || "60";
       case "data_rfi": return dados.data_rfi;
+      case "nx_base": return dados.nx_base ?? "";
+      case "di_base": return dados.di_base ?? "";
       default: return dados.extras?.[campo] ?? "";
     }
   };
@@ -476,6 +479,10 @@ export async function gerarNddPreenchido(
     let valor: string = "";
     if (m.valorFixo !== undefined && m.valorFixo !== "") {
       valor = m.valorFixo;
+    } else if (m.transformacao && TRANSFORMACOES[m.transformacao]) {
+      // Aplicar transformação (ex: "area_base" calcula nx_base × di_base)
+      valor = TRANSFORMACOES[m.transformacao](dados);
+      log("info", `Transformação "${m.transformacao}" aplicada → ${celula}="${valor}"`);
     } else if (m.campo.trim()) {
       valor = resolverValor(m.campo.trim());
       if (m.br && valor) valor = String(valor).replace(".", ",");
