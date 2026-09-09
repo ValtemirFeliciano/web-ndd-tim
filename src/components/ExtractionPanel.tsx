@@ -55,7 +55,7 @@ const COLS_EQ: { chave: keyof Equipamento; rotulo: string; w: string }[] = [
   { chave: "modelo", rotulo: "Modelo", w: "w-32" },
   { chave: "qtde", rotulo: "Qtde", w: "w-14" },
   { chave: "azimute", rotulo: "Azimute", w: "w-18" },
-  { chave: "altura", rotulo: "Altura", w: "w-16" },
+  { chave: "comprimento", rotulo: "Compr.", w: "w-16" },
   { chave: "largura", rotulo: "Larg.", w: "w-16" },
   { chave: "profundidade", rotulo: "Prof.", w: "w-16" },
   { chave: "rad_center", rotulo: "Rad.Ctr", w: "w-20" },
