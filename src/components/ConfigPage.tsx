@@ -164,6 +164,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
                 <th className="px-2 py-2 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">Campo (JSON)</th>
                 <th className="w-24 px-2 py-2 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">Célula</th>
                 <th className="px-2 py-2 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">Valor fixo (opcional)</th>
+                <th className="w-28 px-2 py-2 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">Transformação</th>
                 <th className="w-16 px-2 py-2 text-center font-mono text-[9px] uppercase tracking-wider text-mist-500">BR ,</th>
                 <th className="w-10 px-2 py-2" />
               </tr>
@@ -171,7 +172,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
             <tbody>
               {cfg.mapeamento.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-5 text-center font-mono text-[11px] text-mist-600">
+                  <td colSpan={7} className="px-3 py-5 text-center font-mono text-[11px] text-mist-600">
                     mapa vazio — clique em “adicionar campo” para criar a primeira regra
                   </td>
                 </tr>
@@ -187,11 +188,11 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
                         list="campos-conhecidos"
                         value={m.campo}
                         onChange={(e) => setCampo(m.id, { campo: e.target.value })}
-                        placeholder={temFixo ? "—" : "ex: site_id_cliente"}
+                        placeholder={temFixo || m.transformacao ? "—" : "ex: site_id_cliente"}
                         className={`field-input w-full px-2 py-1 font-mono text-[11px] ${celInvalida ? "" : ""}`}
-                        disabled={temFixo}
+                        disabled={temFixo || !!m.transformacao}
                       />
-                      {m.campo && DESCRICOES_CAMPOS[m.campo.trim()] && !temFixo && (
+                      {m.campo && DESCRICOES_CAMPOS[m.campo.trim()] && !temFixo && !m.transformacao && (
                         <p className="mt-0.5 truncate font-mono text-[8.5px] text-mist-600">{DESCRICOES_CAMPOS[m.campo.trim()]}</p>
                       )}
                     </td>
@@ -211,7 +212,22 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
                         onChange={(e) => setCampo(m.id, { valorFixo: e.target.value, campo: e.target.value ? "" : m.campo })}
                         placeholder={m.campo ? "" : 'ex: "( X )"'}
                         className="field-input w-full px-2 py-1 font-mono text-[11px] text-amber-300/90"
+                        disabled={!!m.transformacao}
                       />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <select
+                        value={m.transformacao ?? ""}
+                        onChange={(e) => setCampo(m.id, { 
+                          transformacao: e.target.value || undefined,
+                          campo: e.target.value ? "" : m.campo,
+                          valorFixo: e.target.value ? undefined : m.valorFixo
+                        })}
+                        className="field-input w-full px-2 py-1 font-mono text-[10px]"
+                      >
+                        <option value="">(nenhuma)</option>
+                        <option value="area_base">área_base (nx × dim)</option>
+                      </select>
                     </td>
                     <td className="px-2 py-1.5 text-center">
                       <button
