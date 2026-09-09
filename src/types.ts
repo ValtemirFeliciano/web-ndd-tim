@@ -7,7 +7,7 @@ export interface Equipamento {
   modelo: string;
   qtde: number | string;
   azimute: string;
-  altura: string;
+  comprimento: string;
   largura: string;
   profundidade: string;
   rad_center: string;
@@ -121,7 +121,7 @@ export const EQUIPAMENTO_VAZIO: Equipamento = {
   modelo: "",
   qtde: 1,
   azimute: "-",
-  altura: "-",
+  comprimento: "-",
   largura: "-",
   profundidade: "-",
   rad_center: "",
