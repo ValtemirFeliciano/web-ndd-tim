@@ -1,0 +1,25 @@
+# Template Padrão NDD
+
+Este arquivo é um placeholder. O template real será gerado automaticamente pelo sistema.
+
+## Como gerar o template padrão
+
+Execute o script:
+
+```bash
+node scripts/gerar-template-padrao.js
+```
+
+Isso criará o arquivo `NDD-padrao.xlsx` com o layout completo.
+
+## Alternativa: baixar pela interface
+
+Na interface do NDD Forge, clique no botão **"Baixar template padrão para editar"** (abaixo do passo 02). Isso gerará e baixará o template padrão para você editar no Excel.
+
+## Como usar
+
+1. Edite o arquivo `NDD-padrao.xlsx` no Excel
+2. Salve mantendo o mesmo nome
+3. O sistema carregará automaticamente na próxima execução
+
+Se o arquivo não existir, o sistema usará o template embutido (gerado via código).
