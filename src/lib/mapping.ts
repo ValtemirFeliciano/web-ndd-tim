@@ -56,10 +56,10 @@ function mapeamentoPadrao(): CampoMapeamento[] {
 /** Aliases padrão para mapear nomes de colunas do PDF para o sistema */
 function aliasesPadrao(): AliasColuna[] {
   return [
-    { id: novoId(), campoSistema: "altura", aliasPdf: "L" },
-    { id: novoId(), campoSistema: "altura", aliasPdf: "Length" },
-    { id: novoId(), campoSistema: "altura", aliasPdf: "H" },
-    { id: novoId(), campoSistema: "altura", aliasPdf: "Height" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "L" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Length" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "H" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Height" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "W" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Width" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Larg" },
@@ -89,8 +89,6 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    COORDENADAS em graus decimais (ex: -22.906847, sem símbolos ° ou letras N/S/E/W) e DATA_RFI (formato dd/mm/aaaa).
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento, mantendo os valores de AEV
    EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065).
-NAO trazer nome de fabricantes.
--REGRA CRÍTICA: O tipo de antena MW só vem a coluna Profundidade, se o tipo de antena for MW so trazer profundidade
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
@@ -100,14 +98,9 @@ NAO trazer nome de fabricantes.
      * Mantenha a ordem das dimensões EXATAMENTE como aparece no PDF (não inverta)
      * O cálculo da área total será feito automaticamente
    - Exemplos:
-     * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" = nx_base="2", di_base="1,00x1,00"
-     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,50X1,30m)" = nx_base="1", di_base="3,50x1,30"
-"2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" = nx_base="2", di_base="1,00x1,00
+     * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
+     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,50X1,30m)" → nx_base="1", di_base="3,50x1,30"
      * "1X BASE DE CONCRETO (1,30x3,50m)" → nx_base="1", di_base="1,30x3,50" (mantenha a ordem do PDF)
-se base for 2x na legenda nx_base=2
-se base for 3x na legenda nx_base=3
-se base não houver quantidade explícita, assuma 1
-se base for 1x na legenda nx_base=1
 6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
 7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
 
@@ -217,7 +210,7 @@ CAMPOS A EXTRAIR:
 ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 
 TABELA DE EQUIPAMENTOS: extraia um objeto por equipamento (tabela de carregamento, normalmente na página 3).
-Colunas: OPERADORA, SITUAÇÃO, TIPO, FABRICANTE, MODELO, BANDA, QTDE, AZIMUTE, ALTURA, LARGURA, PROFUNDIDADE, RAD CENTER, TILT MEC., TILT ELET., AEV S/ CA, CA, AEV C/ CA.
+Colunas: OPERADORA, SITUAÇÃO, TIPO, FABRICANTE, MODELO, BANDA, QTDE, AZIMUTE, COMPRIMENTO, LARGURA, PROFUNDIDADE, RAD CENTER, TILT MEC., TILT ELET., AEV S/ CA, CA, AEV C/ CA.
 Mantenha os AEV com PONTO decimal (ex: 0.888 e 1.065), exatamente como no relatório.
 
 REGRAS FINAIS:
@@ -231,21 +224,21 @@ ${schemaCampos || '  "site_id_cliente": "",'}
     "origem_site_id": "Páginas 1, 2 e 3 — carimbo SITE",
     "origem_altura_torre": "Página 2 item 03 e Página 3 elevação",
     "origem_equipamentos": "Página 3 — tabela de carregamento"
-    "area_base_concreto": "Página 3 e 9 - Legenda da Planta Civil/Planta Baixo/Radier
   },
   "equipamentos": [
     {
       "tipo_equipamento": "",
+      "fabricante": "",
       "modelo": "",
-      "qtde": "",
+      "qtde": 1,
       "azimute": "",
-      "altura": "",
+      "comprimento": "",
       "largura": "",
       "profundidade": "",
       "rad_center": "",
-      "aev_sem_ca": "",
-      "ca": "",
-      "aev_com_ca": ""
+      "aev_sem_ca": "0.888",
+      "ca": "1.2",
+      "aev_com_ca": "1.065"
     }
   ]
 }`;
