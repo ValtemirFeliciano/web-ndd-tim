@@ -92,11 +92,15 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
-   - Extraia as DIMENSÕES de cada base (ex: "1,00x1,00" ou "3,00x5,00") → campo "di_base"
-   - IMPORTANTE: Extraia APENAS a quantidade e as dimensões individuais. O cálculo da área total será feito automaticamente.
+   - Extraia as DIMENSÕES de cada base EXATAMENTE como aparecem no PDF → campo "di_base"
+   - IMPORTANTE:
+     * Extraia APENAS a quantidade e as dimensões individuais
+     * Mantenha a ordem das dimensões EXATAMENTE como aparece no PDF (não inverta)
+     * O cálculo da área total será feito automaticamente
    - Exemplos:
      * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
-     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,00X5,00m)" → nx_base="1", di_base="3,00x5,00"
+     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,50X1,30m)" → nx_base="1", di_base="3,50x1,30"
+     * "1X BASE DE CONCRETO (1,30x3,50m)" → nx_base="1", di_base="1,30x3,50" (mantenha a ordem do PDF)
 6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
 7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
 
