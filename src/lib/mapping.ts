@@ -21,8 +21,8 @@ export const DESCRICOES_CAMPOS: Record<string, string> = {
   longitude: "longitude em graus decimais (ex: -43.172897, sem ° nem E/W)",
   altura_ev: 'altura da EV — item 03 da legenda ou cota na elevação da torre (ex: "60")',
   data_rfi: "data do RFI no formato dd/mm/aaaa",
-  area_para_instalacao: "formato (ex: 3.5 x 1.3)",
-  area_solo_total: "formato das dimensoes (ex: 4.55)"
+  nx_base: "quantidade de bases de concreto (ex: 2)",
+  di_base: 'dimensões da base (ex: "1,00x1,00" ou "3,00x5,00")',
 };
 
 export const CAMPOS_CONHECIDOS = Object.keys(DESCRICOES_CAMPOS);
@@ -36,19 +36,20 @@ const novoId = () => `m_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 function mapeamentoPadrao(): CampoMapeamento[] {
   // Réplica exata do mapa de células do Apps Script original (preencherPlanilha).
   return [
+    { id: novoId(), campo: "data_rfi", celula: "D7" },
     { id: novoId(), campo: "site_id_cliente", celula: "C9" },
     { id: novoId(), campo: "site_id_detentor", celula: "P9" },
     { id: novoId(), campo: "latitude", celula: "C11" },
-    { id: novoId(), campo: "longitude", celula: "I11" },
+    { id: novoId(), campo: "longitude", celula: "J11" },
+    { id: novoId(), campo: "endereco", celula: "C12" },
     { id: novoId(), campo: "endereco", celula: "D12" },
     { id: novoId(), campo: "bairro", celula: "B13" },
     { id: novoId(), campo: "cidade", celula: "I13" },
     { id: novoId(), campo: "cep", celula: "O13" },
     { id: novoId(), campo: "uf", celula: "S13" },
+    { id: novoId(), campo: "altura_ev", celula: "C14" },
     { id: novoId(), campo: "altura_ev", celula: "D14" },
     { id: novoId(), campo: "", celula: "D15", valorFixo: "( X )" },
-    { id: novoId(), campo: "area_para_instalacao", celula: "K46" },
-    { id: novoId(), campo: "area_solo_total", celula: "E49" },
   ];
 }
 
@@ -60,17 +61,16 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    COORDENADAS em graus decimais (ex: -22.906847, sem símbolos ° ou letras N/S/E/W) e DATA_RFI (formato dd/mm/aaaa).
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento, mantendo os valores de AEV
    EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065).
-5. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
-6. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.
-7. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
-- Procure na LEGENDA da Planta Civil/Planta baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
-- Veja a quantidade e as dimensões (ex: "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)").
-- Regra de cálculo: Se houver 2 bases de "1,00m x1,00m" some as dimensões resultando em "2 x 2", Se for 1 base de "1,00m x 1,00m"
-  resulta em "1 x 1" Se for "3,00m x 5,00m" resulta em "3 x 5", se for base concreto 2x  "3,00m x 5,00m" resulta em "6 x 10".
-8. area_solo_total: resultado da base multiplicado, ex: resuldade base de concreto = "2 x 2" area solo total = 4, 
-resuldade base de concreto = "3.55 x 2"  area solo total = 7.1. 
-`
-  ;
+5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
+   - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO".
+   - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
+   - Extraia as DIMENSÕES de cada base (ex: "1,00x1,00" ou "3,00x5,00") → campo "di_base"
+   - IMPORTANTE: Extraia APENAS a quantidade e as dimensões individuais. O cálculo da área total será feito automaticamente.
+   - Exemplos:
+     * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
+     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,00X5,00m)" → nx_base="1", di_base="3,00x5,00"
+6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
+7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
 
 export const CONFIG_PADRAO: ConfigAutomacao = {
   instrucoes: INSTRUCOES_PADRAO,
