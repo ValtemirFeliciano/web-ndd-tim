@@ -95,6 +95,30 @@ npm run preview    # serve o build localmente
 
 ---
 
+## 📂 Pasta de Templates (`public/templates/`)
+
+O sistema usa a pasta `public/templates/` para armazenar o template padrão do NDD:
+
+- **`NDD-padrao.xlsx`** — Template padrão usado automaticamente quando nenhum template é enviado no passo 02
+- **`README.md`** — Documentação da pasta
+
+### Como personalizar o template padrão
+
+1. Clique em **"Baixar template padrão para editar"** (botão abaixo do passo 02)
+2. Abra o arquivo no Excel e edite formatação, cores, bordas, fórmulas etc.
+3. Salve e coloque em `public/templates/NDD-padrao.xlsx`
+4. Recarregue o NDD Forge — o novo template será usado automaticamente
+
+### Como gerar o template padrão (desenvolvedores)
+
+```bash
+node scripts/gerar-template-padrao.js
+```
+
+Este script gera o arquivo `public/templates/NDD-padrao.xlsx` com o layout completo (cabeçalho, tabela de equipamentos, formatação).
+
+---
+
 ## ⚙️ Página Mapeamento & Prompt
 
 Acesse pela aba **"Mapeamento & Prompt"** no topo. É aqui que você adapta a automação ao seu template real:
@@ -143,6 +167,13 @@ src/
 │   ├── mapping.ts             # mapa de células configurável + montagem do prompt
 │   └── excel.ts               # ExcelJS: template, reparo de fórmulas, preenchimento
 └── types.ts                   # contrato de dados (JSON da IA + automação)
+
+public/templates/
+├── NDD-padrao.xlsx            # template padrão editável pelo usuário
+└── README.md                  # documentação da pasta
+
+scripts/
+└── gerar-template-padrao.js   # gera o template padrão (node scripts/gerar-template-padrao.js)
 ```
 
 ---
