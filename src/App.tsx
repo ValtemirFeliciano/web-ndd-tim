@@ -81,6 +81,22 @@ export default function App() {
   const saidaUrlRef = useRef<string | null>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
 
+  /* rolagem automática até o console ao extrair (desligada por padrão) */
+  const [autoScroll, setAutoScroll] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem("nddforge.autoscroll.v1") === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("nddforge.autoscroll.v1", autoScroll ? "1" : "0");
+    } catch {
+      /* ignora */
+    }
+  }, [autoScroll]);
+
   /* navegação + automação configurável (mapa de células & prompt) */
   const [pagina, setPagina] = useState<"extracao" | "config">("extracao");
   const [cfg, setCfg] = useState<ConfigAutomacao>(() => carregarConfig());
@@ -188,10 +204,12 @@ export default function App() {
     setFase("Preparando arquivo…");
     log("info", `═══ Nova extração iniciada · arquivo: ${ppi.nome} · modelo: ${modelo} ═══`);
 
-    // leva a tela até o console de debug para acompanhar o pipeline ao vivo
-    setTimeout(() => {
-      consoleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 150);
+    // leva a tela até o console de debug — apenas se o switch estiver ligado
+    if (autoScroll) {
+      setTimeout(() => {
+        consoleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    }
 
     try {
       marcarStep("arquivo", "running");
@@ -398,7 +416,7 @@ export default function App() {
       ) : (
       <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[400px_1fr]">
         {/* ============ coluna esquerda: entrada ============ */}
-        <div className="grid content-start gap-5">
+        <div className="min-w-0 grid content-start gap-5">
           <div className="rise-in">
             <p className="mb-2 font-mono text-[10px] uppercase tracking-[0.28em] text-cyan-400">
               automação de engenharia · telecom
@@ -442,6 +460,35 @@ export default function App() {
                   Extrair dados com IA
                 </>
               )}
+            </button>
+
+            <button
+              onClick={() => setAutoScroll((v) => !v)}
+              role="switch"
+              aria-checked={autoScroll}
+              title={autoScroll ? "Desligar rolagem automática" : "Ligar rolagem automática"}
+              className={`group flex w-fit items-center gap-2.5 rounded-md border px-3 py-2 transition-all ${
+                autoScroll
+                  ? "border-cyan-500/50 bg-cyan-400/10 text-cyan-300"
+                  : "border-ink-600 bg-ink-850/60 text-mist-500 hover:border-ink-500 hover:text-mist-300"
+              }`}
+            >
+              <span
+                className={`relative inline-flex h-[18px] w-[34px] shrink-0 items-center rounded-full border transition-all duration-300 ${
+                  autoScroll ? "border-cyan-400/70 bg-cyan-500/30" : "border-ink-500 bg-ink-800"
+                }`}
+              >
+                <span
+                  className={`absolute h-[12px] w-[12px] rounded-full transition-all duration-300 ease-out ${
+                    autoScroll
+                      ? "left-[18px] bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.7)]"
+                      : "left-[3px] bg-mist-600 group-hover:bg-mist-500"
+                  }`}
+                />
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em]">
+                rolar até o console · {autoScroll ? "on" : "off"}
+              </span>
             </button>
             {!apiKey.trim() && (
               <p className="fade-in rounded border border-warn-400/40 bg-warn-400/8 px-3 py-2 font-mono text-[10px] leading-snug text-warn-400">
@@ -519,7 +566,7 @@ export default function App() {
           {/* mapa de células */}
           <div className="rise-in tick-panel rounded-md p-4" style={{ animationDelay: "0.24s" }}>
             <p className="mb-2.5 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-mist-500">
-              <Braces size={11} className="text-amber-500" />  mapa de células.
+              <Braces size={11} className="text-amber-500" /> mapa de células → igual ao seu Apps Script
             </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px]">
               {[
