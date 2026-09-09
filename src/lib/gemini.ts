@@ -71,30 +71,90 @@ export function limparJson(texto: string, log: Logger): string {
 /** Aplica aliases para mapear nomes de colunas do PDF para o sistema */
 function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipIndex: number): any {
   if (!obj || typeof obj !== "object") return obj;
-  
+
   const resultado = { ...obj };
-  let aliasesAplicados = 0;
-  
+
+  // Primeiro, normalizar todas as chaves para lowercase para facilitar o mapeamento
+  const objNormalizado: any = {};
+  for (const key of Object.keys(resultado)) {
+    objNormalizado[key.toLowerCase()] = resultado[key];
+  }
+
+  // Mapeamento direto de nomes comuns (case-insensitive)
+  const mapeamentoDireto: Record<string, string> = {
+    "tipo_equipamento": "tipo_equipamento",
+    "tipo": "tipo_equipamento",
+    "equipment": "tipo_equipamento",
+    "fabricante": "fabricante",
+    "fab": "fabricante",
+    "manufacturer": "fabricante",
+    "modelo": "modelo",
+    "model": "modelo",
+    "mod": "modelo",
+    "qtde": "qtde",
+    "qtd": "qtde",
+    "qty": "qtde",
+    "quantidade": "qtde",
+    "azimute": "azimute",
+    "az": "azimute",
+    "azim": "azimute",
+    "altura": "altura",
+    "h": "altura",
+    "height": "altura",
+    "l": "altura",
+    "length": "altura",
+    "largura": "largura",
+    "w": "largura",
+    "width": "largura",
+    "larg": "largura",
+    "profundidade": "profundidade",
+    "p": "profundidade",
+    "prof": "profundidade",
+    "depth": "profundidade",
+    "d": "profundidade",
+    "rad_center": "rad_center",
+    "radcenter": "rad_center",
+    "aev_sem_ca": "aev_sem_ca",
+    "aevsemca": "aev_sem_ca",
+    "ca": "ca",
+    "aev_com_ca": "aev_com_ca",
+    "aevcomca": "aev_com_ca",
+  };
+
+  // Aplicar mapeamento direto primeiro
+  for (const [keyOrig, keyDest] of Object.entries(mapeamentoDireto)) {
+    if (objNormalizado[keyOrig] !== undefined && keyOrig !== keyDest) {
+      if (objNormalizado[keyDest] === undefined || objNormalizado[keyDest] === "" || objNormalizado[keyDest] === "-") {
+        objNormalizado[keyDest] = objNormalizado[keyOrig];
+        log("info", `Equipamento #${equipIndex + 1}: mapeamento direto "${keyOrig}" → "${keyDest}"`);
+      }
+    }
+  }
+
+  // Depois, aplicar aliases personalizados do usuário
   aliases.forEach((alias) => {
     const aliasLower = alias.aliasPdf.toLowerCase();
-    const campoSistema = alias.campoSistema;
-    
-    // Procurar pelo alias no objeto (case-insensitive)
-    for (const key of Object.keys(resultado)) {
-      if (key.toLowerCase() === aliasLower) {
-        // Se o campo do sistema ainda não existe ou está vazio, aplicar o alias
-        if (!resultado[campoSistema] || resultado[campoSistema] === "" || resultado[campoSistema] === "-") {
-          resultado[campoSistema] = resultado[key];
-          aliasesAplicados++;
-          log("info", `Equipamento #${equipIndex + 1}: alias "${alias.aliasPdf}" → "${campoSistema}"`);
-        }
-        // Remover a chave do alias para não duplicar
-        delete resultado[key];
+    const campoSistema = alias.campoSistema.toLowerCase();
+
+    // Não aplicar se o alias é igual ao campo do sistema
+    if (aliasLower === campoSistema) {
+      return;
+    }
+
+    // Procurar pelo alias no objeto normalizado
+    if (objNormalizado[aliasLower] !== undefined) {
+      // Só aplicar se o campo do sistema NÃO existe ainda
+      // (não sobrescrever valores já normalizados pelo mapeamento direto)
+      if (objNormalizado[campoSistema] === undefined) {
+        objNormalizado[campoSistema] = objNormalizado[aliasLower];
+        log("info", `Equipamento #${equipIndex + 1}: alias personalizado "${alias.aliasPdf}" → "${campoSistema}"`);
+      } else {
+        log("warn", `Equipamento #${equipIndex + 1}: alias "${alias.aliasPdf}" ignorado - campo "${campoSistema}" já possui valor`);
       }
     }
   });
-  
-  return resultado;
+
+  return objNormalizado;
 }
 
 /** Preenche campos ausentes para o objeto ficar 100% compatível com o contrato. */
@@ -104,28 +164,29 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   if (!Array.isArray(bruto.equipamentos)) {
     log("warn", "O campo 'equipamentos' não veio como array — tratando como lista vazia.");
   }
-  
+
   if (aliases.length > 0) {
     log("info", `Aplicando ${aliases.length} alias(es) de colunas para normalização...`);
   }
-  
+
   const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
-    // Aplicar aliases antes de normalizar
+    // Aplicar aliases antes de normalizar (retorna objeto com chaves lowercase)
     const eComAliases = aplicarAliases(e, aliases, log, i);
-    
+
+    // Agora todas as chaves estão em lowercase, então acessamos diretamente
     const eq: Equipamento = {
-      tipo_equipamento: s(eComAliases?.tipo_equipamento ?? eComAliases?.tipo),
+      tipo_equipamento: s(eComAliases?.tipo_equipamento),
       fabricante: s(eComAliases?.fabricante) || "-",
       modelo: s(eComAliases?.modelo),
-      qtde: eComAliases?.qtde ?? eComAliases?.quantidade ?? 1,
+      qtde: eComAliases?.qtde ?? 1,
       azimute: s(eComAliases?.azimute) || "-",
       altura: s(eComAliases?.altura) || "-",
       largura: s(eComAliases?.largura) || "-",
       profundidade: s(eComAliases?.profundidade) || "-",
-      rad_center: s(eComAliases?.rad_center ?? eComAliases?.radcenter),
-      aev_sem_ca: s(eComAliases?.aev_sem_ca ?? eComAliases?.aevSemCa),
+      rad_center: s(eComAliases?.rad_center),
+      aev_sem_ca: s(eComAliases?.aev_sem_ca),
       ca: s(eComAliases?.ca) || "1.2",
-      aev_com_ca: s(eComAliases?.aev_com_ca ?? eComAliases?.aevComCa),
+      aev_com_ca: s(eComAliases?.aev_com_ca),
     };
     if (!eq.tipo_equipamento && !eq.modelo) {
       log("warn", `Equipamento #${i + 1} veio sem tipo e sem modelo — pode ser linha de resumo da tabela.`);
@@ -171,12 +232,12 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     dados.extras = extras;
     log("info", `Campo(s) personalizado(s) capturado(s): ${Object.keys(extras).join(", ")}.`);
   }
-  
+
   // Log específico para campos de base de concreto
   if (dados.nx_base || dados.di_base) {
     log("info", `Base de concreto extraída: nx_base="${dados.nx_base}", di_base="${dados.di_base}"`);
   }
-  
+
   return dados;
 }
 
