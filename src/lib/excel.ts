@@ -407,8 +407,29 @@ export async function gerarNddPreenchido(
     // (arrastadas) que o ExcelJS não consegue reescrever em certas posições.
     repararFormulasCompartilhadas(wb, log);
   } else {
-    wb = criarTemplatePadrao();
-    log("info", "Nenhum template enviado — usando o modelo padrão embutido (layout NDD).");
+    // Tentar carregar o template padrão da pasta public/templates/
+    try {
+      log("info", "Tentando carregar template padrão de /templates/NDD-padrao.xlsx…");
+      const response = await fetch("/templates/NDD-padrao.xlsx");
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        wb = new ExcelJS.Workbook();
+        await wb.xlsx.load(buffer);
+        const alvo =
+          wb.worksheets.find((s) => s.name.trim().toUpperCase() === "NDD") ??
+          wb.worksheets.find((s) => /ndd/i.test(s.name)) ??
+          wb.worksheets[0];
+        if (!alvo) throw new Error("Template padrão não possui aba válida.");
+        abaUsada = alvo.name;
+        log("ok", `Template padrão carregado de /templates/NDD-padrao.xlsx (${(buffer.byteLength / 1024).toFixed(1)} KB). Usando a aba "${alvo.name}".`);
+        repararFormulasCompartilhadas(wb, log);
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (e: any) {
+      log("warn", `Template padrão não encontrado (${e.message}) — usando modelo embutido.`);
+      wb = criarTemplatePadrao();
+    }
   }
 
   // força o Excel a recalcular as fórmulas remanescentes ao abrir o arquivo
@@ -549,4 +570,30 @@ export function baixarBlob(blob: Blob, nome: string) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/**
+ * Baixa o template padrão NDD-padrao.xlsx para o usuário editar.
+ * Se o arquivo existir em /templates/, baixa ele. Caso contrário,
+ * gera e baixa o template embutido.
+ */
+export async function baixarTemplatePadrao(): Promise<void> {
+  try {
+    const response = await fetch("/templates/NDD-padrao.xlsx");
+    if (response.ok) {
+      const blob = await response.blob();
+      baixarBlob(blob, "NDD-padrao.xlsx");
+      return;
+    }
+  } catch {
+    // arquivo não existe, gerar embutido
+  }
+  
+  // Fallback: gerar template embutido
+  const wb = criarTemplatePadrao();
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  baixarBlob(blob, "NDD-padrao.xlsx");
 }
