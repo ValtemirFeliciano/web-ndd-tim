@@ -247,10 +247,10 @@ export function validarConfig(cfg: ConfigAutomacao): string[] {
     const cel = m.celula.trim();
     if (!CELULA_RE.test(cel)) avisos.push(`Regra #${i + 1}: célula "${cel || "(vazia)"}" é inválida — use o formato A1, B12, AA3…`);
     const temFixo = m.valorFixo !== undefined && m.valorFixo !== "";
-    if (!temFixo && m.campo && !CAMPO_RE.test(m.campo)) {
+    if (!temFixo && !m.transformacao && m.campo && !CAMPO_RE.test(m.campo)) {
       avisos.push(`Regra #${i + 1}: campo "${m.campo}" deve ser minúsculo com underline (ex: tipo_torre) para bater com o JSON.`);
     }
-    if (!temFixo && !m.campo) avisos.push(`Regra #${i + 1}: sem campo e sem valor fixo — não grava nada em ${cel}.`);
+    if (!temFixo && !m.campo && !m.transformacao) avisos.push(`Regra #${i + 1}: sem campo e sem valor fixo — não grava nada em ${cel}.`);
   });
   if (!(cfg.linhaInicialEq >= 1)) avisos.push("Linha inicial da tabela de equipamentos deve ser ≥ 1.");
   return avisos;
