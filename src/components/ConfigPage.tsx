@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Check, Copy, FileCog, ListChecks, Plus,
+  AlertTriangle, ArrowLeft, Check, ChevronDown, Copy, FileCog, ListChecks, Plus,
   RotateCcw, Save, Sparkles, Table2, Trash2, Wand2,
 } from "lucide-react";
 import type { AliasColuna, CampoMapeamento, ConfigAutomacao } from "../types";
@@ -19,21 +19,36 @@ let seqLocal = 0;
 const novoId = () => `m_ui_${Date.now().toString(36)}_${(seqLocal++).toString(36)}`;
 
 function Secao({
-  titulo, icone, children, extra,
+  titulo, icone, children, extra, colapsavel = false, inicialmenteAberto = true,
 }: {
   titulo: string;
   icone: React.ReactNode;
   children: React.ReactNode;
   extra?: React.ReactNode;
+  colapsavel?: boolean;
+  inicialmenteAberto?: boolean;
 }) {
+  const [aberto, setAberto] = useState(inicialmenteAberto);
+
   return (
     <section className="tick-panel rise-in rounded-md">
-      <header className="flex flex-wrap items-center gap-2 border-b border-ink-600/70 px-4 py-3">
+      <header
+        className={`flex flex-wrap items-center gap-2 px-4 py-3 ${colapsavel ? "cursor-pointer hover:bg-ink-800/50" : ""} ${aberto || !colapsavel ? "border-b border-ink-600/70" : ""}`}
+        onClick={colapsavel ? () => setAberto(!aberto) : undefined}
+      >
         <span className="text-amber-400">{icone}</span>
         <h3 className="font-display text-sm font-semibold uppercase tracking-[0.14em] text-mist-100">{titulo}</h3>
-        <div className="ml-auto flex items-center gap-2">{extra}</div>
+        <div className="ml-auto flex items-center gap-2">
+          {extra}
+          {colapsavel && (
+            <ChevronDown
+              size={18}
+              className={`text-mist-500 transition-transform duration-200 ${aberto ? "rotate-0" : "-rotate-90"}`}
+            />
+          )}
+        </div>
       </header>
-      <div className="p-4">{children}</div>
+      {(!colapsavel || aberto) && <div className="p-4">{children}</div>}
     </section>
   );
 }
@@ -228,7 +243,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
                     <td className="px-2 py-1.5">
                       <select
                         value={m.transformacao ?? ""}
-                        onChange={(e) => setCampo(m.id, { 
+                        onChange={(e) => setCampo(m.id, {
                           transformacao: e.target.value || undefined,
                           campo: e.target.value ? "" : m.campo,
                           valorFixo: e.target.value ? undefined : m.valorFixo
@@ -293,6 +308,8 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
       <Secao
         titulo="Aliases de colunas (PDF → Sistema)"
         icone={<FileCog size={15} />}
+        colapsavel={true}
+        inicialmenteAberto={false}
         extra={
           <>
             <span className="rounded border border-ink-600 px-2 py-0.5 font-mono text-[9px] uppercase text-mist-500">
@@ -310,7 +327,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
         <p className="mb-3 font-mono text-[10px] leading-relaxed text-mist-500">
           Mapeie nomes alternativos que podem aparecer no PDF para os campos do sistema.
           Exemplo: se o PDF usa <span className="font-mono text-cyan-300">"L"</span> em vez de{" "}
-          <span className="font-mono text-cyan-300">"altura"</span>, adicione um alias.
+          <span className="font-mono text-cyan-300">"comprimento"</span>, adicione um alias.
         </p>
 
         <div className="overflow-x-auto rounded border border-ink-600">
@@ -339,7 +356,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
                       list="campos-sistema"
                       value={a.campoSistema}
                       onChange={(e) => setAlias(a.id, { campoSistema: e.target.value })}
-                      placeholder="ex: altura"
+                      placeholder="ex: comprimento"
                       className="field-input w-full px-2 py-1 font-mono text-[11px]"
                     />
                   </td>
@@ -365,7 +382,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
             </tbody>
           </table>
           <datalist id="campos-sistema">
-            <option value="altura" />
+            <option value="comprimento" />
             <option value="largura" />
             <option value="profundidade" />
             <option value="azimute" />
@@ -378,7 +395,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
 
         <p className="mt-2 font-mono text-[9px] leading-relaxed text-mist-600">
           💡 <span className="text-amber-400">Dica:</span> Os aliases são aplicados durante a normalização dos dados.
-          Se o PDF usar "L" para altura, o sistema vai automaticamente mapear para o campo "altura".
+          Se o PDF usar "L" para comprimento, o sistema vai automaticamente mapear para o campo "comprimento".
           Verifique o log completo para ver quais aliases foram aplicados.
         </p>
       </Secao>
