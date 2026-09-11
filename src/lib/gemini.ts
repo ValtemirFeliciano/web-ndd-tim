@@ -265,18 +265,41 @@ export function validarDados(d: DadosPPI): string[] {
 async function postGemini(url: string, payload: object, log: Logger): Promise<{ status: number; corpo: string }> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 150_000); // 2min e meio p/ PDFs grandes
+
+  // Heartbeat de progresso
+  let segundos = 0;
+  const heartbeat = setInterval(() => {
+    segundos += 5;
+    log("info", `⏱️ Aguardando resposta do Gemini... ${segundos}s decorridos`);
+  }, 5000);
+
   try {
+    log("info", `📤 Enviando requisição para ${url.split('?')[0]}...`);
+    const inicioFetch = performance.now();
+
     const resp = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: ctrl.signal,
     });
-    return { status: resp.status, corpo: await resp.text() };
+
+    const duracaoFetch = ((performance.now() - inicioFetch) / 1000).toFixed(1);
+    log("info", `📥 Resposta recebida em ${duracaoFetch}s (HTTP ${resp.status})`);
+
+    const corpo = await resp.text();
+    log("info", `📊 Tamanho da resposta: ${(corpo.length / 1024).toFixed(1)}KB`);
+
+    return { status: resp.status, corpo };
   } catch (e: any) {
-    if (e?.name === "AbortError") throw new Error("Tempo esgotado (150s) aguardando o Gemini. PDF muito grande ou API lenta — tente um modelo Flash.");
+    if (e?.name === "AbortError") {
+      log("error", `⏰ Timeout: 150s esgotados aguardando o Gemini`);
+      throw new Error("Tempo esgotado (150s) aguardando o Gemini. PDF muito grande ou API lenta — tente um modelo Flash.");
+    }
+    log("error", `❌ Erro de rede: ${e?.message ?? e}`);
     throw new Error(`Falha de rede ao contatar o Gemini: ${e?.message ?? e}. Verifique sua conexão/CORS.`);
   } finally {
+    clearInterval(heartbeat);
     clearTimeout(timer);
   }
 }
@@ -317,62 +340,101 @@ export async function extrairDoPdf(
   let tentativas = 0;
   for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_503; tentativa++) {
     tentativas = tentativa;
-    log("info", tentativa === 1 ? `POST → ${modelo} …` : `Tentativa ${tentativa}/${MAX_TENTATIVAS_503} após 503 …`);
+
+    if (tentativa === 1) {
+      log("info", `🚀 Iniciando chamada ao modelo: ${modelo}`);
+      log("info", `📄 Tamanho do PDF: ${(arquivo.tamanho / 1024 / 1024).toFixed(2)}MB`);
+      log("info", `📝 Tamanho do prompt: ${prompt.length} caracteres`);
+    } else {
+      log("warn", `🔄 Tentativa ${tentativa}/${MAX_TENTATIVAS_503} após erro 503...`);
+    }
+
     const r = await postGemini(url, payload, log);
+
     if (r.status === 503 && tentativa < MAX_TENTATIVAS_503) {
       const espera = 4000 * tentativa;
-      log("warn", `503 (sobrecarga). Aguardando ${espera / 1000}s antes de repetir…`);
+      log("warn", `⚠️ Erro 503 (sobrecarga do servidor). Aguardando ${espera / 1000}s antes de repetir…`);
       await dormir(espera);
       continue;
     }
+
     if (r.status !== 200) {
-      log("error", `HTTP ${r.status}`, r.corpo.slice(0, 1200));
+      log("error", `❌ Erro HTTP ${r.status}`, r.corpo.slice(0, 1200));
       const err: any = new Error(descreverErroHttp(r.status, r.corpo));
       err.raw = r.corpo;
       throw err;
     }
+
     corpo = r.corpo;
-    log("ok", `HTTP 200 — resposta recebida (${(corpo.length / 1024).toFixed(1)}KB)${tentativa > 1 ? ` na ${tentativa}ª tentativa` : ""}.`);
+    const duracaoTotal = ((performance.now() - inicio) / 1000).toFixed(1);
+    log("ok", `✅ Sucesso! Resposta recebida (${(corpo.length / 1024).toFixed(1)}KB)${tentativa > 1 ? ` na ${tentativa}ª tentativa` : ""}. Tempo total: ${duracaoTotal}s`);
     break;
   }
 
   let textoIA = "";
   try {
+    log("info", `🔍 Processando resposta do Gemini...`);
     const respJson = JSON.parse(corpo);
+
     const promptFeedback = respJson?.promptFeedback?.blockReason;
-    if (promptFeedback) throw new Error(`Conteúdo bloqueado pelo filtro de segurança do Gemini: ${promptFeedback}.`);
-    const cand = respJson?.candidates?.[0];
-    if (!cand) throw new Error("Resposta sem 'candidates' — abra a aba 'Resposta bruta' para ver o que voltou.");
-    if (cand.finishReason && cand.finishReason !== "STOP" && cand.finishReason !== "MAX_TOKENS") {
-      log("warn", `finishReason: ${cand.finishReason}`);
+    if (promptFeedback) {
+      log("error", `🚫 Conteúdo bloqueado pelo filtro de segurança: ${promptFeedback}`);
+      throw new Error(`Conteúdo bloqueado pelo filtro de segurança do Gemini: ${promptFeedback}.`);
     }
+
+    const cand = respJson?.candidates?.[0];
+    if (!cand) {
+      log("error", `❌ Resposta sem 'candidates'`);
+      throw new Error("Resposta sem 'candidates' — abra a aba 'Resposta bruta' para ver o que voltou.");
+    }
+
+    if (cand.finishReason && cand.finishReason !== "STOP" && cand.finishReason !== "MAX_TOKENS") {
+      log("warn", `⚠️ finishReason: ${cand.finishReason}`);
+    }
+
+    log("info", `📝 Extraindo texto da resposta...`);
     textoIA = cand?.content?.parts?.map((p: any) => p?.text ?? "").join("") ?? "";
-    if (!textoIA.trim()) throw new Error("A IA retornou texto vazio.");
+
+    if (!textoIA.trim()) {
+      log("error", `❌ Texto vazio retornado pela IA`);
+      throw new Error("A IA retornou texto vazio.");
+    }
+
+    log("info", `✅ Texto extraído: ${textoIA.length} caracteres`);
   } catch (e: any) {
     if (e?.message?.startsWith("Conteúdo") || e?.message?.startsWith("Resposta") || e?.message?.startsWith("A IA")) throw e;
+    log("error", `❌ Erro ao processar resposta: ${e?.message}`);
     throw new Error("Não foi possível ler o envelope da resposta do Gemini. Veja a aba 'Resposta bruta'.");
   }
 
   let jsonLimpo = "";
   try {
+    log("info", `🧹 Limpando JSON da resposta...`);
     jsonLimpo = limparJson(textoIA, log);
+    log("info", `✅ JSON limpo: ${jsonLimpo.length} caracteres`);
   } catch (e: any) {
+    log("error", `❌ Erro ao limpar JSON: ${e?.message}`);
     e.raw = corpo;
     throw e;
   }
+
   let bruto: any;
   try {
+    log("info", `🔧 Parseando JSON...`);
     bruto = JSON.parse(jsonLimpo);
-    log("ok", "JSON parseado com sucesso.");
+    log("ok", "✅ JSON parseado com sucesso.");
   } catch (e: any) {
-    log("error", "JSON inválido mesmo após a limpeza", jsonLimpo.slice(0, 1500));
+    log("error", "❌ JSON inválido mesmo após a limpeza", jsonLimpo.slice(0, 1500));
     const err: any = new Error(`A IA devolveu um JSON malformado (${e.message}). Tente novamente — ou copie o prompt e teste no AI Studio.`);
     err.raw = corpo;
     throw err;
   }
 
+  log("info", `🔄 Normalizando dados e aplicando aliases...`);
   const dados = normalizarDados(bruto, log, aliases);
   const duracaoMs = Math.round(performance.now() - inicio);
+  log("info", `⏱️ Tempo total de processamento: ${(duracaoMs / 1000).toFixed(1)}s`);
+
   return { dados, rawRequest, rawResponse: corpo, duracaoMs, tentativas };
 }
 
