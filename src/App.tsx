@@ -77,6 +77,8 @@ export default function App() {
   const [processando, setProcessando] = useState(false);
   const [gerando, setGerando] = useState(false);
   const [fase, setFase] = useState("");
+  const [tempoDecorrido, setTempoDecorrido] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const [erroExcel, setErroExcel] = useState("");
   const [saidaExcel, setSaidaExcel] = useState<{ url: string; nome: string; aba: string; celulas: number; kb: string } | null>(null);
   const saidaUrlRef = useRef<string | null>(null);
@@ -120,7 +122,7 @@ export default function App() {
       ...prev.slice(-250),
       { id: ++logId.current, hora: `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`, level, msg, detalhe },
     ]);
-    
+
     // Registrar no logger global para exportação
     logger.log(level, msg, detalhe);
   }, []);
@@ -205,7 +207,14 @@ export default function App() {
     setSteps(STEPS_INICIAIS);
     setRawRequest("");
     setRawResponse("");
+    setTempoDecorrido(0);
     setFase("Preparando arquivo…");
+
+    // Iniciar timer de progresso
+    timerRef.current = setInterval(() => {
+      setTempoDecorrido(prev => prev + 1);
+    }, 1000);
+
     log("info", `═══ Nova extração iniciada · arquivo: ${ppi.nome} · modelo: ${modelo} ═══`);
 
     // leva a tela até o console de debug — apenas se o switch estiver ligado
@@ -248,6 +257,10 @@ export default function App() {
       setAvisos(av);
       setMeta({ dados: r.dados, em: new Date().toISOString(), arquivo: ppi.nome, modelo, duracaoMs: r.duracaoMs, avisos: av });
       setFase("");
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       log("ok", `═══ Extração concluída em ${(r.duracaoMs / 1000).toFixed(1)}s (${r.tentativas} tentativa${r.tentativas > 1 ? "s" : ""}). Revise os dados e gere o Excel. ═══`);
     } catch (e: any) {
       const msg = e?.message ?? String(e);
@@ -256,6 +269,10 @@ export default function App() {
       if (falhaParse) marcarStep("parse", "error");
       else marcarStep("parse", "idle");
       setFase("");
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
       if (typeof e?.raw === "string" && e.raw) {
         setRawResponse(e.raw);
         log("info", "Resposta bruta capturada na aba 'Resposta bruta' do console para inspeção.");
@@ -462,6 +479,11 @@ export default function App() {
                 <>
                   <Radar size={17} className="animate-spin" />
                   {fase || "Processando…"}
+                  {tempoDecorrido > 0 && (
+                    <span className="ml-2 font-mono text-xs opacity-75">
+                      ({Math.floor(tempoDecorrido / 60)}:{String(tempoDecorrido % 60).padStart(2, '0')})
+                    </span>
+                  )}
                 </>
               ) : (
                 <>
