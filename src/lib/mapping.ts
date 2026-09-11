@@ -80,6 +80,7 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    - Segunda linha (ex: SN-RRRSI4) = "site_id_cliente".
 2. ALTURA DA EV: item 03 da legenda ou cota na elevação da torre (ex: "60"). Se não encontrar, use "60".
 3. Extraia: ENDEREÇO COMPLETO, BAIRRO, CIDADE, CEP (somente dígitos), UF (sigla com 2 letras),
+   Os campos são separados por "-" (ex: endereço: VC CAFÉ DO POVO - BAIRRO: CRISTO VIVO..)
    COORDENADAS em graus decimais (ex: -22.906847, sem símbolos ° ou letras N/S/E/W) e DATA_RFI (formato dd/mm/aaaa).
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento, mantendo os valores de AEV
    EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065),
