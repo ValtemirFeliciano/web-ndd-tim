@@ -32,19 +32,6 @@ function brDecimal(v: string | number, padrao = ""): string {
   return s.replace(".", ",");
 }
 
-/** Mantém formato americano para números (ex: 0.888 → 0.888) - usado para inserir como número no Excel */
-function numeroDecimal(v: string | number, padrao: string | number = ""): string | number {
-  const s = String(v ?? "").trim();
-  if (!s) return padrao;
-  // Se já é número, retorna como está
-  if (typeof v === "number") return v;
-  // Se é string, tenta converter para número
-  const num = parseFloat(s.replace(".", ","));
-  if (!isNaN(num) && isFinite(num)) return num;
-  // Se não for número válido, retorna como string
-  return s;
-}
-
 /* ------------------------------------------------------------------ */
 /*  Template padrão embutido (réplica do layout NDD)                   */
 /* ------------------------------------------------------------------ */
@@ -56,7 +43,7 @@ const LARGURAS: Record<string, number> = {
 
 const HEADERS_EQ = [
   "OPERADORA", "SITUAÇÃO", "TIPO", "FABRICANTE", "MODELO", "BANDA", "QTDE",
-  "AZIMUTE (°)", "COMPRIMENTO (m)", "LARGURA (m)", "PROF. (m)", "RAD CENTER",
+  "AZIMUTE (°)", "ALTURA (m)", "LARGURA (m)", "PROF. (m)", "RAD CENTER",
   "TILT MEC.", "TILT ELET.", "AEV S/ CA (m²)", "CA", "AEV C/ CA (m²)",
 ];
 
@@ -455,30 +442,9 @@ export async function gerarNddPreenchido(
 
   const aba = wb.worksheets.find((s) => s.name === abaUsada) ?? wb.worksheets[0];
   let n = 0;
-
-  // Função auxiliar para converter strings numéricas em números reais
-  const converterParaNumero = (valor: string | number): string | number => {
-    if (typeof valor === "number") return valor;
-    if (typeof valor !== "string") return valor;
-
-    // Remover espaços e substituir vírgula por ponto (formato BR para EN)
-    const limpo = valor.trim().replace(",", ".");
-
-    // Tentar converter para número
-    const num = parseFloat(limpo);
-
-    // Se for um número válido e não for NaN, retornar como número
-    if (!isNaN(num) && isFinite(num)) {
-      return num;
-    }
-
-    // Caso contrário, retornar como string
-    return valor;
-  };
-
   const escreve = (cel: string, valor: string | number) => {
     if (valor === "" || valor === null || valor === undefined) return;
-    aba.getCell(cel).value = converterParaNumero(valor);
+    aba.getCell(cel).value = valor;
     n++;
   };
 
@@ -529,7 +495,7 @@ export async function gerarNddPreenchido(
       return;
     }
     if (valor === "") return;
-    aba.getCell(celula).value = converterParaNumero(valor);
+    aba.getCell(celula).value = valor;
     n++;
     escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
   });
@@ -549,19 +515,19 @@ export async function gerarNddPreenchido(
       escreve(`C${L}`, eq.tipo_equipamento);
       escreve(`D${L}`, eq.fabricante || "-");
       escreve(`E${L}`, eq.modelo);
-      escreve(`G${L}`, numeroDecimal(eq.qtde, 1));
-      escreve(`H${L}`, numeroDecimal(eq.azimute, "-"));
-      escreve(`I${L}`, numeroDecimal(eq.comprimento, "-"));
-      escreve(`J${L}`, numeroDecimal(eq.largura, "-"));
-      escreve(`K${L}`, numeroDecimal(eq.profundidade, "-"));
-      escreve(`L${L}`, numeroDecimal(eq.rad_center, "-"));
+      escreve(`G${L}`, Number(eq.qtde) || eq.qtde || 1);
+      escreve(`H${L}`, eq.azimute || "-");
+      escreve(`I${L}`, eq.comprimento || "-");
+      escreve(`J${L}`, eq.largura || "-");
+      escreve(`K${L}`, eq.profundidade || "-");
+      escreve(`L${L}`, eq.rad_center);
       escreve(`M${L}`, "N/A");
       escreve(`N${L}`, "N/A");
-      escreve(`O${L}`, numeroDecimal(eq.aev_sem_ca, 0));
-      escreve(`P${L}`, numeroDecimal(eq.ca, 1.2));
-      escreve(`Q${L}`, numeroDecimal(eq.aev_com_ca, 0));
+      escreve(`O${L}`, brDecimal(eq.aev_sem_ca));
+      escreve(`P${L}`, brDecimal(eq.ca, "1,2"));
+      escreve(`Q${L}`, brDecimal(eq.aev_com_ca));
     });
-    log("ok", `Tabela de equipamentos: ${qtdEq} linha(s) escritas a partir da linha ${linhaInicial} (valores numéricos inseridos como números reais).`);
+    log("ok", `Tabela de equipamentos: ${qtdEq} linha(s) escritas a partir da linha 23 (AEV no formato BR, com vírgula).`);
   } else {
     log("warn", "Nenhum equipamento para gravar — a tabela ficou como estava.");
   }
@@ -597,16 +563,15 @@ export async function gerarNddPreenchido(
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
-  // Gerar nome do arquivo seguindo o padrão: [NDD] WINITY_{ID_OPERADORA}_{ID_WINITY}_{CIDADE}
-  const idOperadora = dados.site_id_cliente || "SEM_ID";
-  const idWinity = dados.site_id_detentor || "SEM_ID";
+  // Gerar nome do arquivo seguindo o padrão: [NDD] WINITY_{ID_OPERADORA}_{ID_WINITY}_{CIDADE}_{ID_OPERADORA}
+  const idOperadora = dados.site_id_cliente || "SEM_ID_OPERADORA";
+  const idWinity = dados.site_id_detentor || "SEM_ID_WINITY";
   const cidade = dados.cidade || "SEM_CIDADE";
 
-  // Sanitizar para uso em nome de arquivo (remover caracteres inválidos e espaços)
-  const sanitizar = (str: string) => str.replace(/[<>:"/\\|?*]/g, "_").replace(/\s+/g, "").trim();
+  // Sanitizar para uso em nome de arquivo (remover caracteres inválidos)
+  const sanitizar = (str: string) => str.replace(/[<>:"/\\|?*]/g, "_").trim();
 
-  // Formato mais curto para evitar problemas visuais
-  const nomeArquivo = `[NDD]_${sanitizar(idOperadora)}_${sanitizar(idWinity)}_${sanitizar(cidade)}.xlsx`;
+  const nomeArquivo = `[NDD] WINITY_${sanitizar(idOperadora)}_${sanitizar(idWinity)}_${sanitizar(cidade)}_${sanitizar(idOperadora)}.xlsx`;
 
   return {
     blob,
