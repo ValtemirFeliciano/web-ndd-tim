@@ -51,7 +51,6 @@ function Grupo({ titulo, icone, children }: { titulo: string; icone: React.React
 
 const COLS_EQ: { chave: keyof Equipamento; rotulo: string; w: string }[] = [
   { chave: "tipo_equipamento", rotulo: "Tipo", w: "w-28" },
-  { chave: "fabricante", rotulo: "Fabric.", w: "w-24" },
   { chave: "modelo", rotulo: "Modelo", w: "w-32" },
   { chave: "qtde", rotulo: "Qtde", w: "w-14" },
   { chave: "azimute", rotulo: "Azimute", w: "w-18" },
