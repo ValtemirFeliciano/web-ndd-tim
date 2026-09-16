@@ -565,9 +565,9 @@ export default function App() {
                     <a
                       href={saidaExcel.url}
                       download={saidaExcel.nome}
-                      className="mt-2.5 flex items-center justify-center gap-2 rounded border border-ok-500/60 bg-ok-500/15 px-3 py-2 font-display text-xs font-bold uppercase tracking-wide text-ok-400 transition-colors hover:bg-ok-500/25"
+                      className="mt-2.5 flex min-w-0 items-center justify-center gap-2 overflow-hidden rounded border border-ok-500/60 bg-ok-500/15 px-3 py-2 font-display text-xs font-bold uppercase tracking-wide text-ok-400 transition-colors hover:bg-ok-500/25"
                     >
-                      <Download size={13} /> Baixar novamente
+                      <Download size={13} className="shrink-0" /> <span className="truncate">Baixar novamente</span>
                     </a>
                     <p className="mt-1.5 text-center font-mono text-[9px] uppercase tracking-wider text-mist-600">
                       o download automático já começou — se o navegador bloqueou, clique acima
