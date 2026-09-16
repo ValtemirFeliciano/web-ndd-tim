@@ -25,11 +25,48 @@ const BORDA_FIN: Partial<Borders> = {
   right: { style: "thin", color: { argb: "FF9DB2C9" } },
 };
 
-/** Converte decimal com ponto para vírgula (ex: 0.888 → 0,888), como no seu Apps Script. */
+/** Converte decimal com ponto para vírgula (ex: 0.888 → 0,888), como no seu Apps Script.
+ *  Mantido só como FALLBACK TEXTUAL para quando o valor não é numérico de verdade
+ *  (ver `escreveNumero` abaixo para a escrita como Number real). */
 function brDecimal(v: string | number, padrao = ""): string {
   const s = String(v ?? "").trim();
   if (!s) return padrao;
   return s.replace(".", ",");
+}
+
+/** Converte string numérica (com vírgula ou ponto) em Number real, ou null se inválido. */
+function paraNumero(v: string | number | undefined | null): number | null {
+  if (v === "" || v === null || v === undefined) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  if (!s || s === "-") return null;
+  // remove qualquer coisa que não seja dígito, vírgula, ponto ou sinal
+  const limpo = s.replace(/[^\d,.\-]/g, "");
+  if (!limpo) return null;
+  // decide o separador decimal: se tem vírgula, ela é o decimal (padrão BR);
+  // pontos antes dela são separadores de milhar e são removidos.
+  let normalizado: string;
+  if (limpo.includes(",")) {
+    normalizado = limpo.replace(/\./g, "").replace(",", ".");
+  } else {
+    normalizado = limpo;
+  }
+  const n = Number(normalizado);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Escreve um valor numérico REAL na célula (não string), com formatação de
+ *  casas decimais. O separador exibido (ponto ou vírgula) é decidido pelo
+ *  Excel/configuração regional de quem abre o arquivo — nunca "hardcoded".
+ *  Retorna true se conseguiu escrever como número; false se o valor não era
+ *  numérico (nesse caso, o chamador deve usar o fallback de texto). */
+function escreveNumero(aba: any, cel: string, valor: unknown, casas = 3): boolean {
+  const n = paraNumero(valor as any);
+  if (n === null) return false;
+  const c = aba.getCell(cel);
+  c.value = n;
+  c.numFmt = casas > 0 ? `0.${"0".repeat(casas)}` : "0";
+  return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -495,6 +532,14 @@ export async function gerarNddPreenchido(
       return;
     }
     if (valor === "") return;
+    // Se a regra veio marcada com "m.br" (campo numérico com decimal BR),
+    // escreve como Number real em vez de string com vírgula — evita que o
+    // Excel trate o conteúdo como texto.
+    if (m.br && escreveNumero(aba, celula, valor, 3)) {
+      n++;
+      escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
+      return;
+    }
     aba.getCell(celula).value = valor;
     n++;
     escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
@@ -515,19 +560,26 @@ export async function gerarNddPreenchido(
       escreve(`C${L}`, eq.tipo_equipamento);
       escreve(`D${L}`, eq.fabricante || "-");
       escreve(`E${L}`, eq.modelo);
-      escreve(`G${L}`, Number(eq.qtde) || eq.qtde || 1);
-      escreve(`H${L}`, eq.azimute || "-");
-      escreve(`I${L}`, eq.comprimento || "-");
-      escreve(`J${L}`, eq.largura || "-");
-      escreve(`K${L}`, eq.profundidade || "-");
-      escreve(`L${L}`, eq.rad_center);
+
+      // QTDE, ângulos e dimensões: número real, sem casas decimais/inteiro
+      if (!escreveNumero(aba, `G${L}`, eq.qtde, 0)) escreve(`G${L}`, eq.qtde ?? 1);
+      if (!escreveNumero(aba, `H${L}`, eq.azimute, 0)) escreve(`H${L}`, eq.azimute || "-");
+      if (!escreveNumero(aba, `I${L}`, eq.comprimento, 2)) escreve(`I${L}`, eq.comprimento || "-");
+      if (!escreveNumero(aba, `J${L}`, eq.largura, 2)) escreve(`J${L}`, eq.largura || "-");
+      if (!escreveNumero(aba, `K${L}`, eq.profundidade, 2)) escreve(`K${L}`, eq.profundidade || "-");
+      if (!escreveNumero(aba, `L${L}`, eq.rad_center, 2)) escreve(`L${L}`, eq.rad_center);
+
       escreve(`M${L}`, "N/A");
       escreve(`N${L}`, "N/A");
-      escreve(`O${L}`, brDecimal(eq.aev_sem_ca));
-      escreve(`P${L}`, brDecimal(eq.ca, "1,2"));
-      escreve(`Q${L}`, brDecimal(eq.aev_com_ca));
+
+      // AEV sem CA, CA e AEV com CA: número real com 3/2 casas decimais.
+      // O separador (ponto ou vírgula) fica a cargo do Excel de quem abre o
+      // arquivo — não é mais "travado" como string com vírgula.
+      if (!escreveNumero(aba, `O${L}`, eq.aev_sem_ca, 3)) escreve(`O${L}`, brDecimal(eq.aev_sem_ca));
+      if (!escreveNumero(aba, `P${L}`, eq.ca, 2)) escreve(`P${L}`, brDecimal(eq.ca, "1,2"));
+      if (!escreveNumero(aba, `Q${L}`, eq.aev_com_ca, 3)) escreve(`Q${L}`, brDecimal(eq.aev_com_ca));
     });
-    log("ok", `Tabela de equipamentos: ${qtdEq} linha(s) escritas a partir da linha 23 (AEV no formato BR, com vírgula).`);
+    log("ok", `Tabela de equipamentos: ${qtdEq} linha(s) escritas a partir da linha 23 (valores numéricos gravados como Number, formatados com numFmt).`);
   } else {
     log("warn", "Nenhum equipamento para gravar — a tabela ficou como estava.");
   }
