@@ -45,7 +45,7 @@ function mapeamentoPadrao(): CampoMapeamento[] {
     { id: novoId(), campo: "cep", celula: "O13" },
     { id: novoId(), campo: "uf", celula: "S13" },
     { id: novoId(), campo: "altura_ev", celula: "D14" },
-    { id: novoId(), campo: "", celula: "D15", valorFixo: "( X )" },
+    { id: novoId(), campo: "", celula: "K46", transformacao: "area_base"},
   ];
 }
 
