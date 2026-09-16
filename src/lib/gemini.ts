@@ -85,9 +85,6 @@ function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipInde
     "tipo_equipamento": "tipo_equipamento",
     "tipo": "tipo_equipamento",
     "equipment": "tipo_equipamento",
-    "fabricante": "fabricante",
-    "fab": "fabricante",
-    "manufacturer": "fabricante",
     "modelo": "modelo",
     "model": "modelo",
     "mod": "modelo",
@@ -177,7 +174,6 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     // Agora todas as chaves estão em lowercase, então acessamos diretamente
     const eq: Equipamento = {
       tipo_equipamento: s(eComAliases?.tipo_equipamento),
-      fabricante: s(eComAliases?.fabricante) || "-",
       modelo: s(eComAliases?.modelo),
       qtde: eComAliases?.qtde ?? 1,
       azimute: s(eComAliases?.azimute) || "-",
@@ -186,7 +182,7 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
       profundidade: s(eComAliases?.profundidade) || "-",
       rad_center: s(eComAliases?.rad_center),
       aev_sem_ca: s(eComAliases?.aev_sem_ca),
-      ca: s(eComAliases?.ca) || "1.2",
+      ca: s(eComAliases?.ca) || "-",
       aev_com_ca: s(eComAliases?.aev_com_ca),
     };
     if (!eq.tipo_equipamento && !eq.modelo) {
