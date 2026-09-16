@@ -117,7 +117,6 @@ export interface ResultadoExtracao {
 
 export const EQUIPAMENTO_VAZIO: Equipamento = {
   tipo_equipamento: "",
-  fabricante: "",
   modelo: "",
   qtde: 1,
   azimute: "-",
