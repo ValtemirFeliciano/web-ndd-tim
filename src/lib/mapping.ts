@@ -128,6 +128,7 @@ export function carregarConfig(): ConfigAutomacao {
                 celula: String(m.celula).trim().toUpperCase(),
                 br: !!m.br,
                 valorFixo: typeof m.valorFixo === "string" ? m.valorFixo : undefined,
+                transformacao: typeof m.transformacao === "string" ? m.transformacao : undefined,
               }))
           : mapeamentoPadrao(),
       linhaInicialEq: Number(j.linhaInicialEq) > 0 ? Number(j.linhaInicialEq) : 23,
