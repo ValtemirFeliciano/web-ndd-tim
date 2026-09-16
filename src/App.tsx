@@ -423,7 +423,7 @@ export default function App() {
       {pagina === "config" ? (
         <ConfigPage cfg={cfg} onChange={setCfg} onVoltar={() => setPagina("extracao")} />
       ) : (
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[400px_1fr]">
+      <main className="mx-auto grid min-w-0 max-w-7xl gap-6 overflow-hidden px-4 py-8 sm:px-6 lg:grid-cols-[400px_1fr]">
         {/* ============ coluna esquerda: entrada ============ */}
         <div className="min-w-0 grid content-start gap-5">
           <div className="rise-in">
@@ -550,11 +550,11 @@ export default function App() {
                 )}
 
                 {saidaExcel && (
-                  <div className="fade-in rounded border border-ok-500/60 bg-ok-500/10 p-3.5">
-                    <div className="flex items-start gap-3">
+                 <div className="fade-in min-w-0 overflow-hidden rounded border border-ok-500/60 bg-ok-500/10 p-3.5">
+                    <div className="flex min-w-0 items-start gap-3">
                       <Download size={18} className="mt-0.5 shrink-0 text-ok-400" />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-mono text-xs font-semibold text-ok-400" title={saidaExcel.nome}>
+                        <p className="truncate break-all font-mono text-xs font-semibold text-ok-400" title={saidaExcel.nome}>
                           {saidaExcel.nome}
                         </p>
                         <p className="mt-0.5 font-mono text-[10px] text-mist-500">
