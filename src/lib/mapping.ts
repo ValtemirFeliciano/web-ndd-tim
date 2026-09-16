@@ -92,8 +92,16 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
      * Extraia APENAS a quantidade e as dimensões individuais
      * Mantenha a ordem das dimensões EXATAMENTE como aparece no PDF (não inverta)
      * O cálculo da área total será feito automaticamente
-     REGRA DE EXCLUSÃO CRÍTICA: IGNORE completamente qualquer medida atrelada a "PROJEÇÃO DE BASE", "FUTURA EXPANSÃO" ou "EXPANSÃO"
-   - Exemplos:
+     REGRA DE EXCLUSÃO CRÍTICA: 
+      - IGNORE completamente qualquer medida atrelada a "PROJEÇÃO DE BASE", "FUTURA EXPANSÃO" ou "EXPANSÃO"
+      - IGNORE cotas de hastes ou barras de aterramento (comum apresentarem 2,00m / 2.00m).
+      - IGNORE alturas de gradil, cercas ou afastamentos do muro/divisória (comum apresentarem 2,00m).
+      - IGNORE recuos de segurança ou espaçamentos entre equipamentos.
+ REGRA DE EXTRAÇÃO E FORMATO:
+     * Verifique rigorosamente se os dígitos da imagem são "2,10" / "2.10" e não confunda "1" com "0".
+     * A dimensão deve ser a área/superfície da base plana de concreto.
+     * Retorne no formato [Comprimento x Largura] em metros com 2 casas decimais. Exemplo: "2,10x1,30".
+    Exemplos:
      * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
      * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,50X1,30m)" → nx_base="1", di_base="3,50x1,30"
      * "1X BASE DE CONCRETO (1,30x3,50m)" → nx_base="1", di_base="1,30x3,50" (mantenha a ordem do PDF)
