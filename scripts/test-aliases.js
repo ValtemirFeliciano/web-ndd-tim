@@ -20,6 +20,8 @@ const aliasesPadrao = [
   { campoSistema: "qtde", aliasPdf: "Qty" },
   { campoSistema: "tipo_equipamento", aliasPdf: "Tipo_de_antena" },
   { campoSistema: "tipo_equipamento", aliasPdf: "Tipo de antena" },
+  { campoSistema: "tipo_equipamento", aliasPdf: "TIPO ANTENA" },
+  { campoSistema: "tipo_equipamento", aliasPdf: "TIPO DE EQUIPAMENTO" },
   { campoSistema: "tipo_equipamento", aliasPdf: "Equipment" },
   { campoSistema: "modelo", aliasPdf: "Model" },
   { campoSistema: "modelo", aliasPdf: "Mod" },
@@ -53,7 +55,7 @@ function decomporDimensoes(str) {
   const fmt = (n) => {
     // Se veio em milímetros (> 20), converte para metros
     const emMetros = n > 20 ? n / 1000 : n;
-    return Number.isInteger(emMetros) ? emMetros.toString() : emMetros.toFixed(2);
+    return Number.isInteger(emMetros) ? emMetros.toString() : (Math.round((emMetros + Number.EPSILON) * 100) / 100).toFixed(2);
   };
 
   if (partes.length >= 3) {
@@ -88,6 +90,10 @@ function aplicarAliasesInteligente(obj, aliases = []) {
     "tipoequipamento": "tipo_equipamento",
     "tipo": "tipo_equipamento",
     "tipodeantena": "tipo_equipamento",
+    "tipoantena": "tipo_equipamento",
+    "tipodeequipamento": "tipo_equipamento",
+    "tipodoequipamento": "tipo_equipamento",
+    "antena": "tipo_equipamento",
     "equipment": "tipo_equipamento",
     "antennatype": "tipo_equipamento",
     
@@ -201,6 +207,25 @@ function aplicarAliasesInteligente(obj, aliases = []) {
       }
     }
   });
+
+  // 3. Fallback determinístico para tipo_equipamento idêntico ao normalizarDados do sistema
+  let tipoEquip = resultado["tipo_equipamento"];
+  if (!tipoEquip || tipoEquip === "-") {
+    // Procura se algum valor do objeto retornado é "MODULO", "RF", "MW", "GPS" ou "TMA"
+    for (const [k, v] of Object.entries(obj ?? {})) {
+      if (typeof v === "string" && ["MODULO", "RF", "MW", "GPS", "TMA"].includes(v.trim().toUpperCase())) {
+        tipoEquip = v.trim().toUpperCase();
+        break;
+      }
+    }
+    // Se ainda estiver vazio e o modelo contiver "RRU", preenche com "MODULO"
+    if (!tipoEquip && resultado["modelo"] && String(resultado["modelo"]).toUpperCase().includes("RRU")) {
+      tipoEquip = "MODULO";
+    }
+    if (tipoEquip) {
+      resultado["tipo_equipamento"] = tipoEquip;
+    }
+  }
 
   return resultado;
 }
@@ -327,6 +352,62 @@ const casosDeTeste = [
       largura: "0.32",
       profundidade: "0.15"
     }
+  },
+  {
+    nome: "Caso 6: Linha 04 do PPI - RRU NOKIA com TIPO DE ANTENA: MODULO",
+    entrada: {
+      "ALTURA": "40",
+      "SETOR": "-",
+      "TIPO DE ANTENA": "MODULO",
+      "MODELO": "RRU NOKIA",
+      "QUANT.": "03",
+      "AZIMUTE (°NV)": "-",
+      "DIMENSÕES (mm)": "560 x 490 x 140",
+      "ÁREA DE EXPOSIÇÃO SEM ARRASTO": "0.27",
+      "ARRASTO": "1.2",
+      "ÁREA DE EXPOSIÇÃO COM ARRASTO": "0.33"
+    },
+    esperado: {
+      tipo_equipamento: "MODULO",
+      modelo: "RRU NOKIA",
+      qtde: "03",
+      azimute: "-",
+      comprimento: "0.56",
+      largura: "0.49",
+      profundidade: "0.14",
+      rad_center: "40",
+      ca: "1.2"
+    }
+  },
+  {
+    nome: "Caso 7: Chave alternativa 'tipo_antena' (sem 'de') retornada pela IA",
+    entrada: {
+      "tipo_antena": "MODULO",
+      "modelo": "RRU HUAWEI",
+      "qtde": "2",
+      "rad_center": "42"
+    },
+    esperado: {
+      tipo_equipamento: "MODULO",
+      modelo: "RRU HUAWEI",
+      qtde: "2",
+      rad_center: "42"
+    }
+  },
+  {
+    nome: "Caso 8: IA deixou tipo_equipamento vazio para RRU (Fallback por modelo)",
+    entrada: {
+      "tipo_equipamento": "",
+      "modelo": "RRU NOKIA AHEGB",
+      "qtde": "3",
+      "rad_center": "40"
+    },
+    esperado: {
+      tipo_equipamento: "MODULO",
+      modelo: "RRU NOKIA AHEGB",
+      qtde: "3",
+      rad_center: "40"
+    }
   }
 ];
 
@@ -346,7 +427,7 @@ casosDeTeste.forEach((caso, i) => {
 
   for (const [campo, esperadoVal] of Object.entries(caso.esperado)) {
     const obtidoVal = resultado[campo];
-    if (obtidoVal === undefined || obtidoVal === "" || obtidoVal === "-") {
+    if (obtidoVal === undefined || obtidoVal === "") {
       falhou = true;
       diferencas.push(`  x [${campo}] Esperado: "${esperadoVal}" | Obtido: NAO ENCONTRADO / VAZIO`);
     } else if (String(obtidoVal).trim() !== String(esperadoVal).trim()) {

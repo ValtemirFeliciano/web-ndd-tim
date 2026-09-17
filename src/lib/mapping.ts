@@ -54,6 +54,9 @@ function mapeamentoPadrao(): CampoMapeamento[] {
 function aliasesPadrao(): AliasColuna[] {
   return [
     { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO DE ANTENA" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO ANTENA" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO DE EQUIPAMENTO" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO EQUIPAMENTO" },
     { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO" },
     { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Equipment" },
     { id: novoId(), campoSistema: "modelo", aliasPdf: "Model" },
@@ -102,6 +105,7 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    - Extraia separadamente: "bairro" (ex: "CRISTO VIVO" ou "Zona Rural"), "cidade" (ex: "BREU BRANCO"), "uf" (sigla com 2 letras, ex: "PA"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -3.413902 e -49.042893, sem símbolos ° ou letras N/S/E/W).
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento.
    - Extraia os dados brutos exatamente como aparecem nas colunas (não faça conversões manuais).
+   - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "MODULO", "MW", "GPS", "TMA") para o campo "tipo_equipamento". NUNCA deixe vazio se houver valor na célula (ex: para equipamentos RRU onde constar "MODULO", extraia "MODULO").
    - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000").
    - A coluna "DIMENSÕES (mm)" traz as medidas físicas (ex: "1400 x 320 x 145" ou "600").
    - A coluna "ARRASTO" corresponde ao coeficiente "ca" (ex: "1.2" ou "1.6").
@@ -171,18 +175,37 @@ export function carregarConfig(): ConfigAutomacao {
       });
     }
 
+    let instrucoes = typeof j.instrucoes === "string" ? j.instrucoes : INSTRUCOES_PADRAO;
+    if (!instrucoes.includes("MODULO") && !instrucoes.includes("TIPO DE ANTENA")) {
+      instrucoes = INSTRUCOES_PADRAO;
+    }
+
+    const aliasesCarregados =
+      Array.isArray(j.aliasesColunas) && j.aliasesColunas.length > 0
+        ? j.aliasesColunas.map((a: any) => ({
+            id: String(a.id ?? novoId()),
+            campoSistema: String(a.campoSistema ?? "").trim(),
+            aliasPdf: String(a.aliasPdf ?? "").trim(),
+          }))
+        : aliasesPadrao();
+
+    // Garante que aliases essenciais de tipo estejam sempre presentes
+    const temAlias = (nome: string) => aliasesCarregados.some((a: any) => a.aliasPdf.toUpperCase() === nome.toUpperCase());
+    if (!temAlias("TIPO ANTENA")) {
+      aliasesCarregados.push({ id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO ANTENA" });
+    }
+    if (!temAlias("TIPO DE EQUIPAMENTO")) {
+      aliasesCarregados.push({ id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO DE EQUIPAMENTO" });
+    }
+    if (!temAlias("TIPO EQUIPAMENTO")) {
+      aliasesCarregados.push({ id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO EQUIPAMENTO" });
+    }
+
     return {
-      instrucoes: typeof j.instrucoes === "string" ? j.instrucoes : INSTRUCOES_PADRAO,
+      instrucoes,
       mapeamento: mapCarregado,
       linhaInicialEq: Number(j.linhaInicialEq) > 0 ? Number(j.linhaInicialEq) : 23,
-      aliasesColunas:
-        Array.isArray(j.aliasesColunas) && j.aliasesColunas.length > 0
-          ? j.aliasesColunas.map((a: any) => ({
-              id: String(a.id ?? novoId()),
-              campoSistema: String(a.campoSistema ?? "").trim(),
-              aliasPdf: String(a.aliasPdf ?? "").trim(),
-            }))
-          : aliasesPadrao(),
+      aliasesColunas: aliasesCarregados,
     };
   } catch {
     return CONFIG_PADRAO;

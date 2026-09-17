@@ -88,7 +88,7 @@ export function decomporDimensoes(str: string): { comprimento?: string; largura?
   const fmt = (n: number) => {
     // Se for em milímetros (> 20), converte para metros
     const emMetros = n > 20 ? n / 1000 : n;
-    return Number.isInteger(emMetros) ? emMetros.toString() : emMetros.toFixed(2);
+    return Number.isInteger(emMetros) ? emMetros.toString() : (Math.round((emMetros + Number.EPSILON) * 100) / 100).toFixed(2);
   };
 
   if (partes.length >= 3) {
@@ -124,6 +124,11 @@ function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipInde
     tipoequipamento: "tipo_equipamento",
     tipo: "tipo_equipamento",
     tipodeantena: "tipo_equipamento",
+    tipoantena: "tipo_equipamento",
+    tipodeequipamento: "tipo_equipamento",
+    tipodoequipamento: "tipo_equipamento",
+    tipoequip: "tipo_equipamento",
+    antena: "tipo_equipamento",
     equipment: "tipo_equipamento",
     antennatype: "tipo_equipamento",
 
@@ -261,7 +266,7 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     const num = parseFloat(str.replace(",", "."));
     if (!isNaN(num) && num > 20) {
       const emM = num / 1000;
-      return Number.isInteger(emM) ? emM.toString() : emM.toFixed(2);
+      return Number.isInteger(emM) ? emM.toString() : (Math.round((emM + Number.EPSILON) * 100) / 100).toFixed(2);
     }
     return str;
   };
@@ -269,8 +274,26 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
     const eComAliases = aplicarAliases(e, aliases, log, i);
 
+    let tipoEquip = s(eComAliases?.tipo_equipamento);
+    // Se o tipo_equipamento ficou vazio ou "-", verificar se veio em alguma chave com valor conhecido ou inferir por modelo
+    if (!tipoEquip || tipoEquip === "-") {
+      // 1. Procura se algum valor do objeto retornado é "MODULO", "RF", "MW", "GPS" ou "TMA"
+      for (const [k, v] of Object.entries(e ?? {})) {
+        if (typeof v === "string" && ["MODULO", "RF", "MW", "GPS", "TMA"].includes(v.trim().toUpperCase())) {
+          tipoEquip = v.trim().toUpperCase();
+          log("info", `Equipamento #${i + 1}: tipo recuperado da chave "${k}" ("${v}") → tipo_equipamento`);
+          break;
+        }
+      }
+      // 2. Se ainda estiver vazio e o modelo contiver "RRU", preenche com "MODULO"
+      if (!tipoEquip && s(eComAliases?.modelo).toUpperCase().includes("RRU")) {
+        tipoEquip = "MODULO";
+        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "MODULO"`);
+      }
+    }
+
     const eq: Equipamento = {
-      tipo_equipamento: s(eComAliases?.tipo_equipamento),
+      tipo_equipamento: tipoEquip,
       modelo: s(eComAliases?.modelo),
       qtde: eComAliases?.qtde ?? 1,
       azimute: s(eComAliases?.azimute) || "-",
