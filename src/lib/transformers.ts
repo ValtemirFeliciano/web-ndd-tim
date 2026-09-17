@@ -91,9 +91,68 @@ export function calcularAreaBase(
 }
 
 /**
+ * Multiplica as dimensões resultantes da base de concreto.
+ * Exemplo:
+ * - Se a base for "3 x 5" → retorna "15" (3 × 5)
+ * - Se for "1 x 1" → retorna "1" (1 × 1)
+ * - Se for "2 x 2" → retorna "4" (2 × 2)
+ * - Se for "2,10 x 1,30" → retorna "2,73" (2.10 × 1.30)
+ *
+ * @param dimensoesStr - texto com as dimensões (ex: "3 x 5" ou "2,10 x 1,30")
+ * @returns string com o resultado da multiplicação (ex: "15" ou "2,73")
+ */
+export function multiplicarDimensoes(dimensoesStr: string): string {
+  if (!dimensoesStr) return "";
+  const match = dimensoesStr.match(/(\d+(?:[.,]\d+)?)\s*[xX×*]\s*(\d+(?:[.,]\d+)?)/);
+  if (!match) return "";
+  const d1 = parseFloat(match[1].replace(",", "."));
+  const d2 = parseFloat(match[2].replace(",", "."));
+  if (isNaN(d1) || isNaN(d2)) return "";
+  const mult = d1 * d2;
+  return Number.isInteger(mult) ? mult.toString() : mult.toFixed(2).replace(".", ",");
+}
+
+/**
+ * Calcula a multiplicação da base para a célula E49 a partir dos dados do PPI.
+ */
+export function calcularMultiplicacaoBase(
+  nxBaseOrDados: any,
+  diBaseOrLog?: any,
+  logFn?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  let nx: string | undefined;
+  let di: string | undefined;
+  let log = logFn;
+
+  if (typeof nxBaseOrDados === "object" && nxBaseOrDados !== null) {
+    nx = nxBaseOrDados.nx_base;
+    di = nxBaseOrDados.di_base;
+    log = diBaseOrLog;
+  } else if (typeof nxBaseOrDados === "string" && (!diBaseOrLog || typeof diBaseOrLog === "function")) {
+    return multiplicarDimensoes(nxBaseOrDados);
+  } else {
+    nx = nxBaseOrDados;
+    di = diBaseOrLog;
+  }
+
+  const logDebug = log || (() => {});
+  logDebug("info", `═══ CÁLCULO DE MULTIPLICAÇÃO DA BASE (E49) ═══`);
+  const area = calcularAreaBase(nx, di, log);
+  if (!area) {
+    logDebug("warn", `Dimensões da base vazias — multiplicação não calculada`);
+    return "";
+  }
+  const resultado = multiplicarDimensoes(area);
+  logDebug("info", `Multiplicação calculada a partir de "${area}": "${resultado}"`);
+  logDebug("info", `══════════════════════════════════════════════`);
+  return resultado;
+}
+
+/**
  * Mapa de transformações disponíveis.
  * Cada função recebe os dados extraídos e retorna o valor transformado.
  */
 export const TRANSFORMACOES: Record<string, (dados: any, log?: (level: "info" | "warn" | "error", msg: string) => void) => string> = {
   area_base: (dados, log) => calcularAreaBase(dados.nx_base, dados.di_base, log),
+  multiplicacao_base: (dados, log) => calcularMultiplicacaoBase(dados, log),
 };

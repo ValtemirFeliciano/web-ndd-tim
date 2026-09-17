@@ -45,33 +45,50 @@ function mapeamentoPadrao(): CampoMapeamento[] {
     { id: novoId(), campo: "cep", celula: "O13" },
     { id: novoId(), campo: "uf", celula: "S13" },
     { id: novoId(), campo: "altura_ev", celula: "D14" },
-    { id: novoId(), campo: "", celula: "K46", transformacao: "area_base"},
+    { id: novoId(), campo: "", celula: "K46", transformacao: "area_base" },
+    { id: novoId(), campo: "", celula: "E49", transformacao: "multiplicacao_base" },
   ];
 }
 
 /** Aliases padrão para mapear nomes de colunas do PDF para o sistema */
 function aliasesPadrao(): AliasColuna[] {
   return [
-    { id: novoId(), campoSistema: "comprimento", aliasPdf: "DIMENSÕES" },
-    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Length" },
-    { id: novoId(), campoSistema: "comprimento", aliasPdf: "DIMENSÕES (mm)" },
-    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Height" },
-    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES" },
-    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES (mm)" },
-    { id: novoId(), campoSistema: "largura", aliasPdf: "Larg" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "PDIMENSÕES" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Prof" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Depth" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "DIMENSÕES (mm)" },
-    { id: novoId(), campoSistema: "azimute", aliasPdf: "Az" },
-    { id: novoId(), campoSistema: "azimute", aliasPdf: "Azim" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO DE ANTENA" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "TIPO" },
+    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Equipment" },
+    { id: novoId(), campoSistema: "modelo", aliasPdf: "Model" },
+    { id: novoId(), campoSistema: "modelo", aliasPdf: "Mod" },
+    { id: novoId(), campoSistema: "qtde", aliasPdf: "QUANT." },
+    { id: novoId(), campoSistema: "qtde", aliasPdf: "QUANT" },
     { id: novoId(), campoSistema: "qtde", aliasPdf: "Qtd" },
     { id: novoId(), campoSistema: "qtde", aliasPdf: "Qtd." },
     { id: novoId(), campoSistema: "qtde", aliasPdf: "Qty" },
-    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Tipo_de_antena" },
-    { id: novoId(), campoSistema: "tipo_equipamento", aliasPdf: "Equipment" },
-    { id: novoId(), campoSistema: "modelo", aliasPdf: "Model" },
-    { id: novoId(), campoSistema: "modelo", aliasPdf: "modelo" },
+    { id: novoId(), campoSistema: "azimute", aliasPdf: "AZIMUTE (°NV)" },
+    { id: novoId(), campoSistema: "azimute", aliasPdf: "AZIMUTE" },
+    { id: novoId(), campoSistema: "azimute", aliasPdf: "Az" },
+    { id: novoId(), campoSistema: "azimute", aliasPdf: "Azim" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "DIMENSÕES" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "DIMENSÕES (mm)" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Length" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Height" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Alt" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES (mm)" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "Larg" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "Width" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "DIMENSÕES" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "DIMENSÕES (mm)" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Prof" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Depth" },
+    { id: novoId(), campoSistema: "rad_center", aliasPdf: "COTA" },
+    { id: novoId(), campoSistema: "rad_center", aliasPdf: "RAD CENTER" },
+    { id: novoId(), campoSistema: "rad_center", aliasPdf: "RadCenter" },
+    { id: novoId(), campoSistema: "ca", aliasPdf: "ARRASTO" },
+    { id: novoId(), campoSistema: "ca", aliasPdf: "CA" },
+    { id: novoId(), campoSistema: "aev_sem_ca", aliasPdf: "ÁREA DE EXPOSIÇÃO" },
+    { id: novoId(), campoSistema: "aev_sem_ca", aliasPdf: "AEV" },
+    { id: novoId(), campoSistema: "aev_com_ca", aliasPdf: "ÁREA COM ARRASTO" },
+    { id: novoId(), campoSistema: "aev_com_ca", aliasPdf: "ÁREA DE EXPOSIÇÃO COM ARRASTO" },
   ];
 }
 
@@ -79,11 +96,17 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    - Primeira linha (ex: MSRBS006_A) = "site_id_detentor".
    - Segunda linha (ex: SN-RRRSI4) = "site_id_cliente".
 2. ALTURA DA EV: item 03 da legenda ou cota na elevação da torre (ex: "60"). Se não encontrar, use "60".
-3. Extraia: ENDEREÇO COMPLETO, BAIRRO, CIDADE, CEP (somente dígitos), UF (sigla com 2 letras),
-   COORDENADAS em graus decimais (ex: -22.906847, sem símbolos ° ou letras N/S/E/W) e DATA_RFI (formato dd/mm/aaaa).
-4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento, mantendo os valores de AEV
-   EXATAMENTE como aparecem no relatório, com PONTO decimal (ex: 0.888 e 1.065),
-   REGRA CRÍTICA: O tipo de antena MW só vem a coluna Profundidade, se o tipo de antena for MW so trazer profundidade.
+3. LOCALIZAÇÃO E ENDEREÇO (Carimbo):
+   - No carimbo, o endereço costuma vir em linha única separado por hífens (ex: "VC CAFÉ DO POVO - CRISTO VIVO - BREU BRANCO - PA CEP:68695-000").
+   - Isole no campo "endereco" APENAS o logradouro/rua/vicinal/estrada (ex: "VC CAFÉ DO POVO"). NUNCA repita o bairro, cidade, UF ou CEP dentro do campo "endereco".
+   - Extraia separadamente: "bairro" (ex: "CRISTO VIVO" ou "Zona Rural"), "cidade" (ex: "BREU BRANCO"), "uf" (sigla com 2 letras, ex: "PA"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -3.413902 e -49.042893, sem símbolos ° ou letras N/S/E/W).
+4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento.
+   - Extraia os dados brutos exatamente como aparecem nas colunas (não faça conversões manuais).
+   - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000").
+   - A coluna "DIMENSÕES (mm)" traz as medidas físicas (ex: "1400 x 320 x 145" ou "600").
+   - A coluna "ARRASTO" corresponde ao coeficiente "ca" (ex: "1.2" ou "1.6").
+   - Para antena MW com dimensão única (ex: "600"), extraia como profundidade.
+   - Mantenha os valores de AEV como aparecem no documento.
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO" "PARA IMPLANTAÇÃO" ou "A INSTALAR".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
@@ -124,21 +147,33 @@ export function carregarConfig(): ConfigAutomacao {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return CONFIG_PADRAO;
     const j = JSON.parse(raw);
+    const mapCarregado =
+      Array.isArray(j.mapeamento) && j.mapeamento.length > 0
+        ? j.mapeamento
+            .filter((m: any) => m && typeof m.celula === "string")
+            .map((m: any) => ({
+              id: String(m.id ?? novoId()),
+              campo: String(m.campo ?? "").trim(),
+              celula: String(m.celula).trim().toUpperCase(),
+              br: !!m.br,
+              valorFixo: typeof m.valorFixo === "string" ? m.valorFixo : undefined,
+              transformacao: typeof m.transformacao === "string" ? m.transformacao : undefined,
+            }))
+        : mapeamentoPadrao();
+
+    // Garante que a regra E49 exista mesmo para quem já tinha config salva no navegador
+    if (!mapCarregado.some((m: any) => m.celula === "E49")) {
+      mapCarregado.push({
+        id: novoId(),
+        campo: "",
+        celula: "E49",
+        transformacao: "multiplicacao_base",
+      });
+    }
+
     return {
       instrucoes: typeof j.instrucoes === "string" ? j.instrucoes : INSTRUCOES_PADRAO,
-      mapeamento:
-        Array.isArray(j.mapeamento) && j.mapeamento.length > 0
-          ? j.mapeamento
-              .filter((m: any) => m && typeof m.celula === "string")
-              .map((m: any) => ({
-                id: String(m.id ?? novoId()),
-                campo: String(m.campo ?? "").trim(),
-                celula: String(m.celula).trim().toUpperCase(),
-                br: !!m.br,
-                valorFixo: typeof m.valorFixo === "string" ? m.valorFixo : undefined,
-                transformacao: typeof m.transformacao === "string" ? m.transformacao : undefined,
-              }))
-          : mapeamentoPadrao(),
+      mapeamento: mapCarregado,
       linhaInicialEq: Number(j.linhaInicialEq) > 0 ? Number(j.linhaInicialEq) : 23,
       aliasesColunas:
         Array.isArray(j.aliasesColunas) && j.aliasesColunas.length > 0
@@ -206,7 +241,7 @@ export function montarPromptFinal(cfg: ConfigAutomacao): string {
   const schemaCampos = camposDoSchema.map((c) => `  "${c}": "",`).join("\n");
 
   return `Você é um engenheiro de telecomunicações sênior analisando este Projeto Executivo (PPI) em PDF.
-Extraia os dados técnicos com base no carimbo, desenhos, legendas e tabelas (foco nas páginas 1, 2, 3 e 9).
+Extraia os dados técnicos com base no carimbo, desenhos, legendas e tabelas (foco nas páginas 1, 2 e 3).
 
 INSTRUÇÕES DE EXTRAÇÃO:
 ${cfg.instrucoes.trim() || "(nenhuma instrução adicional)"}
@@ -214,9 +249,8 @@ ${cfg.instrucoes.trim() || "(nenhuma instrução adicional)"}
 CAMPOS A EXTRAIR:
 ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 
-TABELA DE EQUIPAMENTOS: extraia um objeto por equipamento (tabela de carregamento, normalmente na página 3).
-Colunas: OPERADORA, SITUAÇÃO, TIPO, MODELO, BANDA, QTDE, AZIMUTE, COMPRIMENTO, LARGURA, PROFUNDIDADE, RAD CENTER, TILT MEC., TILT ELET., AEV S/ CA, CA, AEV C/ CA.
-Mantenha os AEV com PONTO decimal (ex: 0.888 e 1.065), exatamente como no relatório.
+TABELA DE EQUIPAMENTOS (Página 3): extraia um objeto por equipamento com os valores brutos da tabela de carregamento.
+Não faça conversões manuais de unidades — a aplicação fará a normalização, decomposição e conversão de mm para metros automaticamente.
 
 REGRAS FINAIS:
 1. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.
@@ -228,7 +262,7 @@ ${schemaCampos || '  "site_id_cliente": "",'}
   "rastreabilidade": {
     "origem_site_id": "Páginas 1, 2 e 3 — carimbo SITE",
     "origem_altura_torre": "Página 2 item 03 e Página 3 elevação",
-    "origem_equipamentos": "Página 3  — tabela de carregamento"
+    "origem_equipamentos": "Página 3  — tabela de carregamento",
     "base_em_concreto":   "Página 2 e 9  — LEGENDA da Planta Civil/Planta Baixo/Radier"
   },
   "equipamentos": [

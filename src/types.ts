@@ -3,7 +3,6 @@
 
 export interface Equipamento {
   tipo_equipamento: string;
-  fabricante: string;
   modelo: string;
   qtde: number | string;
   azimute: string;
@@ -43,7 +42,6 @@ export interface DadosPPI {
   latitude: string;
   longitude: string;
   altura_ev: string;
-  data_rfi: string;
   rastreabilidade: Rastreabilidade;
   equipamentos: Equipamento[];
   /** Quantidade de bases de concreto (ex: "2") */
@@ -140,7 +138,6 @@ export const DADOS_VAZIOS: DadosPPI = {
   latitude: "",
   longitude: "",
   altura_ev: "60",
-  data_rfi: "",
   rastreabilidade: {
     origem_site_id: "",
     origem_altura_torre: "",
@@ -161,5 +158,4 @@ export const CAMPOS_PRINCIPAIS: { chave: keyof DadosPPI; rotulo: string }[] = [
   { chave: "latitude", rotulo: "Latitude" },
   { chave: "longitude", rotulo: "Longitude" },
   { chave: "altura_ev", rotulo: "Altura EV" },
-  { chave: "data_rfi", rotulo: "Data RFI" },
 ];

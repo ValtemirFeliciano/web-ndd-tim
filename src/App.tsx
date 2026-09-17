@@ -585,9 +585,10 @@ export default function App() {
             </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px]">
               {[
-                ["D7", "data_rfi"], ["C9", "site_id_cliente"], ["P9", "site_id_detentor"],
-                ["C11 / J11", "lat / long"], ["C12", "endereço"], ["B13 · I13", "bairro · cidade"],
-                ["O13 · S13", "cep · uf"], ["C14", "altura_ev"], ["D15", "( X )"], ["A23:Q…", "equipamentos"],
+                ["C9", "site_id_cliente"], ["P9", "site_id_detentor"],
+                ["C11 / J11", "lat / long"], ["D12", "endereço"], ["B13 · I13", "bairro · cidade"],
+                ["O13 · S13", "cep · uf"], ["D14", "altura_ev"], ["K46", "area_base"],
+                ["E49", "mult_base"], ["A23:Q…", "equipamentos"],
               ].map(([cel, campo]) => (
                 <p key={cel} className="flex justify-between gap-2 border-b border-ink-700/60 py-1">
                   <span className="text-cyan-400">{cel}</span>

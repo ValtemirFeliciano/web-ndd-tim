@@ -40,6 +40,8 @@ function paraNumero(v: string | number | undefined | null): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   const s = String(v).trim();
   if (!s || s === "-") return null;
+  // Se contiver letras (ex: 'x' em '3 x 5') ou sinais de multiplicação, não é número simples
+  if (/[a-zA-Z×*]/.test(s)) return null;
   // remove qualquer coisa que não seja dígito, vírgula, ponto ou sinal
   const limpo = s.replace(/[^\d,.\-]/g, "");
   if (!limpo) return null;
@@ -53,6 +55,17 @@ function paraNumero(v: string | number | undefined | null): number | null {
   }
   const n = Number(normalizado);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Normaliza dimensão de equipamento para metros (m).
+ *  Se o valor vier em milímetros (> 20), converte para metros dividindo por 1000. */
+function paraMetros(v: string | number | undefined | null): number | null {
+  const n = paraNumero(v);
+  if (n === null) return null;
+  if (n > 20) {
+    return Number((n / 1000).toFixed(3));
+  }
+  return n;
 }
 
 /** Escreve um valor numérico REAL na célula (não string), com formatação de
@@ -498,7 +511,6 @@ export async function gerarNddPreenchido(
       case "latitude": return dados.latitude;
       case "longitude": return dados.longitude;
       case "altura_ev": return dados.altura_ev || "60";
-      case "data_rfi": return dados.data_rfi;
       case "nx_base": return dados.nx_base ?? "";
       case "di_base": return dados.di_base ?? "";
       default: return dados.extras?.[campo] ?? "";
@@ -540,7 +552,16 @@ export async function gerarNddPreenchido(
       escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
       return;
     }
-    aba.getCell(celula).value = valor;
+    // Se a célula for E49 ou puramente numérica, grava como Number real para que fórmulas dependentes calculem
+    const numReal = paraNumero(valor);
+    if ((celula === "E49" || m.transformacao === "multiplicacao_base") && numReal !== null) {
+      aba.getCell(celula).value = numReal;
+      if (!Number.isInteger(numReal)) {
+        aba.getCell(celula).numFmt = "0.00";
+      }
+    } else {
+      aba.getCell(celula).value = valor;
+    }
     n++;
     escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
   });
@@ -558,15 +579,27 @@ export async function gerarNddPreenchido(
       escreve(`A${L}`, "TIM");
       escreve(`B${L}`, "NOVA");
       escreve(`C${L}`, eq.tipo_equipamento);
-      escreve(`D${L}`, eq.fabricante || "-");
+      escreve(`D${L}`, "-");
       escreve(`E${L}`, eq.modelo);
 
       // QTDE, ângulos e dimensões: número real, sem casas decimais/inteiro
       if (!escreveNumero(aba, `G${L}`, eq.qtde, 0)) escreve(`G${L}`, eq.qtde ?? 1);
       if (!escreveNumero(aba, `H${L}`, eq.azimute, 0)) escreve(`H${L}`, eq.azimute || "-");
-      if (!escreveNumero(aba, `I${L}`, eq.comprimento, 2)) escreve(`I${L}`, eq.comprimento || "-");
-      if (!escreveNumero(aba, `J${L}`, eq.largura, 2)) escreve(`J${L}`, eq.largura || "-");
-      if (!escreveNumero(aba, `K${L}`, eq.profundidade, 2)) escreve(`K${L}`, eq.profundidade || "-");
+
+      // Dimensões convertidas deterministicamente para metros:
+      const compM = paraMetros(eq.comprimento);
+      const largM = paraMetros(eq.largura);
+      const profM = paraMetros(eq.profundidade);
+
+      if (compM !== null) escreveNumero(aba, `I${L}`, compM, 2);
+      else escreve(`I${L}`, eq.comprimento || "-");
+
+      if (largM !== null) escreveNumero(aba, `J${L}`, largM, 2);
+      else escreve(`J${L}`, eq.largura || "-");
+
+      if (profM !== null) escreveNumero(aba, `K${L}`, profM, 2);
+      else escreve(`K${L}`, eq.profundidade || "-");
+
       if (!escreveNumero(aba, `L${L}`, eq.rad_center, 2)) escreve(`L${L}`, eq.rad_center);
 
       escreve(`M${L}`, "N/A");

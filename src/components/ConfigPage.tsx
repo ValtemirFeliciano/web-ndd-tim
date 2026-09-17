@@ -251,7 +251,8 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
                         className="field-input w-full px-2 py-1 font-mono text-[10px]"
                       >
                         <option value="">(nenhuma)</option>
-                        <option value="area_base">área_base (nx × dim)</option>
+                        <option value="area_base">área_base (nx × dim - ex: 3 x 5)</option>
+                        <option value="multiplicacao_base">multiplicação_base (resultado m² - ex: 15)</option>
                       </select>
                     </td>
                     <td className="px-2 py-1.5 text-center">

@@ -1,7 +1,7 @@
 import type { AliasColuna, ArquivoInfo, DadosPPI, Equipamento, LogLevel } from "../types";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
-export const MODELOS_PADRAO = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-pro"];
+export const MODELOS_PADRAO = ["gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"];
 const MAX_TENTATIVAS_503 = 3;
 const LIMITE_INLINE_MB = 18; // margem de segurança abaixo dos 20MB da API
 
@@ -68,91 +68,179 @@ export function limparJson(texto: string, log: Logger): string {
   return t.slice(ini, fim + 1);
 }
 
-/** Aplica aliases para mapear nomes de colunas do PDF para o sistema */
+/** Simplifica uma chave removendo acentos, pontuação e parênteses (ex: "AZIMUTE (°NV)" -> "azimute") */
+export function simplificarChave(k: string): string {
+  return k
+    .toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\(.*?\)/g, "")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
+/** Decompõe string de dimensões como "1400 x 320 x 145", "1.40 x 0.32 x 0.15" ou "600" */
+export function decomporDimensoes(str: string): { comprimento?: string; largura?: string; profundidade?: string } | null {
+  if (!str || typeof str !== "string") return null;
+  const limpo = str.replace(/m/gi, "").replace(/,/g, ".").trim();
+  const partes = limpo.split(/\s*[xX×*]\s*/).map((p) => parseFloat(p.trim())).filter((p) => !isNaN(p));
+  if (partes.length === 0) return null;
+
+  const fmt = (n: number) => {
+    // Se for em milímetros (> 20), converte para metros
+    const emMetros = n > 20 ? n / 1000 : n;
+    return Number.isInteger(emMetros) ? emMetros.toString() : emMetros.toFixed(2);
+  };
+
+  if (partes.length >= 3) {
+    return {
+      comprimento: fmt(partes[0]),
+      largura: fmt(partes[1]),
+      profundidade: fmt(partes[2]),
+    };
+  } else if (partes.length === 2) {
+    return {
+      comprimento: fmt(partes[0]),
+      largura: fmt(partes[1]),
+    };
+  } else if (partes.length === 1) {
+    // Diâmetro único (ex: antena MW 600mm)
+    return {
+      profundidade: fmt(partes[0]),
+    };
+  }
+  return null;
+}
+
+/** Aplica aliases para mapear nomes de colunas do PDF para o sistema com normalização semântica */
 function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipIndex: number): any {
   if (!obj || typeof obj !== "object") return obj;
 
-  const resultado = { ...obj };
+  const resultado: Record<string, any> = {};
+  const chavesOriginais = Object.keys(obj);
 
-  // Primeiro, normalizar todas as chaves para lowercase para facilitar o mapeamento
-  const objNormalizado: any = {};
-  for (const key of Object.keys(resultado)) {
-    objNormalizado[key.toLowerCase()] = resultado[key];
-  }
+  // Mapeamento semântico canônico (todas as chaves em formato limpo por simplificarChave)
+  const mapaCanonico: Record<string, string> = {
+    // Tipo
+    tipoequipamento: "tipo_equipamento",
+    tipo: "tipo_equipamento",
+    tipodeantena: "tipo_equipamento",
+    equipment: "tipo_equipamento",
+    antennatype: "tipo_equipamento",
 
-  // Mapeamento direto de nomes comuns (case-insensitive)
-  const mapeamentoDireto: Record<string, string> = {
-    "tipo_equipamento": "tipo_equipamento",
-    "tipo": "tipo_equipamento",
-    "equipment": "tipo_equipamento",
-    "modelo": "modelo",
-    "model": "modelo",
-    "mod": "modelo",
-    "qtde": "qtde",
-    "qtd": "qtde",
-    "qty": "qtde",
-    "quantidade": "qtde",
-    "azimute": "azimute",
-    "az": "azimute",
-    "azim": "azimute",
-    "comprimento": "comprimento",
-    "altura": "comprimento",
-    "h": "comprimento",
-    "height": "comprimento",
-    "l": "comprimento",
-    "length": "comprimento",
-    "largura": "largura",
-    "w": "largura",
-    "width": "largura",
-    "larg": "largura",
-    "profundidade": "profundidade",
-    "p": "profundidade",
-    "prof": "profundidade",
-    "depth": "profundidade",
-    "d": "profundidade",
-    "rad_center": "rad_center",
-    "radcenter": "rad_center",
-    "aev_sem_ca": "aev_sem_ca",
-    "aevsemca": "aev_sem_ca",
-    "ca": "ca",
-    "aev_com_ca": "aev_com_ca",
-    "aevcomca": "aev_com_ca",
+    // Modelo
+    modelo: "modelo",
+    model: "modelo",
+    mod: "modelo",
+    antennamodel: "modelo",
+
+    // Quantidade
+    qtde: "qtde",
+    qtd: "qtde",
+    qty: "qtde",
+    quant: "qtde",
+    quantidade: "qtde",
+
+    // Azimute
+    azimute: "azimute",
+    az: "azimute",
+    azim: "azimute",
+    azimuth: "azimute",
+
+    // Rad Center (cota de instalação na torre)
+    radcenter: "rad_center",
+    cota: "rad_center",
+    cotainstalacao: "rad_center",
+
+    // Dimensões individuais
+    comprimento: "comprimento",
+    length: "comprimento",
+    height: "comprimento",
+    alt: "comprimento",
+    largura: "largura",
+    larg: "largura",
+    width: "largura",
+    profundidade: "profundidade",
+    prof: "profundidade",
+    depth: "profundidade",
+
+    // Dimensões compostas
+    dimensoes: "dimensoes_compostas",
+    dimensions: "dimensoes_compostas",
+    dimensoesmm: "dimensoes_compostas",
+
+    // Arrasto e AEV
+    ca: "ca",
+    arrasto: "ca",
+    aevsemca: "aev_sem_ca",
+    aev: "aev_sem_ca",
+    areadeexposicao: "aev_sem_ca",
+    aevcomca: "aev_com_ca",
+    areadeexposicaocomarrasto: "aev_com_ca",
+    areacomarrasto: "aev_com_ca",
   };
 
-  // Aplicar mapeamento direto primeiro
-  for (const [keyOrig, keyDest] of Object.entries(mapeamentoDireto)) {
-    if (objNormalizado[keyOrig] !== undefined && keyOrig !== keyDest) {
-      if (objNormalizado[keyDest] === undefined || objNormalizado[keyDest] === "" || objNormalizado[keyDest] === "-") {
-        objNormalizado[keyDest] = objNormalizado[keyOrig];
-        log("info", `Equipamento #${equipIndex + 1}: mapeamento direto "${keyOrig}" → "${keyDest}"`);
+  // 1. Processar chaves normalizadas
+  for (const k of chavesOriginais) {
+    const sKey = simplificarChave(k);
+    let val = obj[k];
+
+    // Limpar valores típicos (símbolos de grau etc)
+    if (typeof val === "string") {
+      val = val.trim();
+      if (sKey === "azimute" || sKey === "az") {
+        val = val.replace(/[°º\s]/g, "");
       }
+    }
+
+    // Caso especial: chave "ALTURA"
+    // Se o valor for > 10 (ex: 50,0000m ou 48,0000m), é cota de instalação na torre (rad_center)
+    if (sKey === "altura") {
+      const numAlt = parseFloat(String(val).replace(",", "."));
+      if (numAlt > 10 && numAlt < 250) {
+        resultado["rad_center"] = val;
+        log("info", `Equipamento #${equipIndex + 1}: cota na torre em ALTURA ("${val}") → rad_center`);
+      } else {
+        resultado["comprimento"] = val;
+      }
+      continue;
+    }
+
+    const destino = mapaCanonico[sKey];
+    if (destino) {
+      if (destino === "dimensoes_compostas") {
+        const decomposto = decomporDimensoes(val);
+        if (decomposto) {
+          if (decomposto.comprimento && !resultado["comprimento"]) resultado["comprimento"] = decomposto.comprimento;
+          if (decomposto.largura && !resultado["largura"]) resultado["largura"] = decomposto.largura;
+          if (decomposto.profundidade && !resultado["profundidade"]) resultado["profundidade"] = decomposto.profundidade;
+          log("info", `Equipamento #${equipIndex + 1}: dimensões compostas "${val}" decompostas em comprimento/largura/profundidade`);
+        }
+      } else {
+        if (!resultado[destino]) {
+          resultado[destino] = val;
+        }
+      }
+    } else {
+      resultado[sKey] = val;
     }
   }
 
-  // Depois, aplicar aliases personalizados do usuário
+  // 2. Aplicar aliases personalizados do usuário
   aliases.forEach((alias) => {
-    const aliasLower = alias.aliasPdf.toLowerCase();
+    const aliasSimples = simplificarChave(alias.aliasPdf);
     const campoSistema = alias.campoSistema.toLowerCase();
-
-    // Não aplicar se o alias é igual ao campo do sistema
-    if (aliasLower === campoSistema) {
-      return;
-    }
-
-    // Procurar pelo alias no objeto normalizado
-    if (objNormalizado[aliasLower] !== undefined) {
-      // Só aplicar se o campo do sistema NÃO existe ainda
-      // (não sobrescrever valores já normalizados pelo mapeamento direto)
-      if (objNormalizado[campoSistema] === undefined) {
-        objNormalizado[campoSistema] = objNormalizado[aliasLower];
-        log("info", `Equipamento #${equipIndex + 1}: alias personalizado "${alias.aliasPdf}" → "${campoSistema}"`);
-      } else {
-        log("warn", `Equipamento #${equipIndex + 1}: alias "${alias.aliasPdf}" ignorado - campo "${campoSistema}" já possui valor`);
+    if (resultado[campoSistema] === undefined || resultado[campoSistema] === "" || resultado[campoSistema] === "-") {
+      for (const k of chavesOriginais) {
+        if (simplificarChave(k) === aliasSimples) {
+          resultado[campoSistema] = obj[k];
+          log("info", `Equipamento #${equipIndex + 1}: alias personalizado "${alias.aliasPdf}" → "${campoSistema}"`);
+          break;
+        }
       }
     }
   });
 
-  return objNormalizado;
+  return resultado;
 }
 
 /** Preenche campos ausentes para o objeto ficar 100% compatível com o contrato. */
@@ -167,19 +255,28 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     log("info", `Aplicando ${aliases.length} alias(es) de colunas para normalização...`);
   }
 
+  const sDim = (v: any) => {
+    const str = s(v);
+    if (!str || str === "-") return "-";
+    const num = parseFloat(str.replace(",", "."));
+    if (!isNaN(num) && num > 20) {
+      const emM = num / 1000;
+      return Number.isInteger(emM) ? emM.toString() : emM.toFixed(2);
+    }
+    return str;
+  };
+
   const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
-    // Aplicar aliases antes de normalizar (retorna objeto com chaves lowercase)
     const eComAliases = aplicarAliases(e, aliases, log, i);
 
-    // Agora todas as chaves estão em lowercase, então acessamos diretamente
     const eq: Equipamento = {
       tipo_equipamento: s(eComAliases?.tipo_equipamento),
       modelo: s(eComAliases?.modelo),
       qtde: eComAliases?.qtde ?? 1,
       azimute: s(eComAliases?.azimute) || "-",
-      comprimento: s(eComAliases?.comprimento) || "-",
-      largura: s(eComAliases?.largura) || "-",
-      profundidade: s(eComAliases?.profundidade) || "-",
+      comprimento: sDim(eComAliases?.comprimento),
+      largura: sDim(eComAliases?.largura),
+      profundidade: sDim(eComAliases?.profundidade),
       rad_center: s(eComAliases?.rad_center),
       aev_sem_ca: s(eComAliases?.aev_sem_ca),
       ca: s(eComAliases?.ca) || "-",
@@ -202,7 +299,6 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     latitude: s(bruto.latitude),
     longitude: s(bruto.longitude),
     altura_ev: s(bruto.altura_ev) || "60",
-    data_rfi: s(bruto.data_rfi),
     nx_base: s(bruto.nx_base),
     di_base: s(bruto.di_base),
     rastreabilidade: {
@@ -217,7 +313,7 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   // campos personalizados (adicionados pelo usuário na página de Configuração)
   const FIXOS = new Set([
     "site_id_cliente", "site_id_detentor", "endereco", "bairro", "cidade", "cep", "uf",
-    "latitude", "longitude", "altura_ev", "data_rfi", "nx_base", "di_base", "rastreabilidade", "equipamentos",
+    "latitude", "longitude", "altura_ev", "nx_base", "di_base", "rastreabilidade", "equipamentos",
   ]);
   const extras: Record<string, string> = {};
   Object.keys(bruto ?? {}).forEach((k) => {

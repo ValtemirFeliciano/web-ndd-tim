@@ -116,16 +116,15 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
       )}
 
       <Grupo titulo="Identificação do site" icone={<Crosshair size={13} />}>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Campo rotulo="Site ID Cliente" celula="C9" valor={dados.site_id_cliente} onChange={(v) => onCampo("site_id_cliente", v)} />
           <Campo rotulo="Site ID Detentor" celula="P9" valor={dados.site_id_detentor} onChange={(v) => onCampo("site_id_detentor", v)} />
-          <Campo rotulo="Data RFI" celula="D7" valor={dados.data_rfi} onChange={(v) => onCampo("data_rfi", v)} />
         </div>
       </Grupo>
 
       <Grupo titulo="Localização" icone={<MapPin size={13} />}>
         <div className="grid gap-3">
-          <Campo rotulo="Endereço completo" celula="C12" mono={false} valor={dados.endereco} onChange={(v) => onCampo("endereco", v)} />
+          <Campo rotulo="Endereço completo" celula="D12" mono={false} valor={dados.endereco} onChange={(v) => onCampo("endereco", v)} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Campo rotulo="Bairro" celula="B13" mono={false} valor={dados.bairro} onChange={(v) => onCampo("bairro", v)} />
             <Campo rotulo="Cidade" celula="I13" mono={false} valor={dados.cidade} onChange={(v) => onCampo("cidade", v)} />
@@ -135,7 +134,7 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Campo rotulo="Latitude" celula="C11" valor={dados.latitude} onChange={(v) => onCampo("latitude", v)} />
             <Campo rotulo="Longitude" celula="J11" valor={dados.longitude} onChange={(v) => onCampo("longitude", v)} />
-            <Campo rotulo="Altura da EV (m)" celula="C14" valor={dados.altura_ev} onChange={(v) => onCampo("altura_ev", v)} />
+            <Campo rotulo="Altura da EV (m)" celula="D14" valor={dados.altura_ev} onChange={(v) => onCampo("altura_ev", v)} />
           </div>
         </div>
       </Grupo>
