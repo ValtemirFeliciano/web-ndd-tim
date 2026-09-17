@@ -76,7 +76,8 @@ function paraMetros(v: string | number | undefined | null): number | null {
 function escreveNumero(aba: any, cel: string, valor: unknown, casas = 3): boolean {
   const n = paraNumero(valor as any);
   if (n === null) return false;
-  const c = aba.getCell(cel);
+  let c = aba.getCell(cel);
+  if (c.isMerged && c.master) c = c.master;
   c.value = n;
   c.numFmt = casas > 0 ? `0.${"0".repeat(casas)}` : "0";
   return true;
@@ -193,6 +194,9 @@ const TIPO_FORMULA: number =
  */
 function ehFormula(c: any): boolean {
   if (!c) return false;
+  // Células escravas de intervalos mesclados NUNCA devem ser tratadas como fórmulas independentes
+  if (c.isMerged && c.master && c.master.address !== c.address) return false;
+  if (c.type === 1) return false; // ValueType.Merge
   if (c.type === TIPO_FORMULA) return true;
   const v = c.value;
   if (v && typeof v === "object") {
@@ -411,6 +415,8 @@ function achatarFormulas(wb: Workbook): number {
     aba.eachRow({ includeEmpty: false }, (linha) => {
       linha.eachCell({ includeEmpty: false }, (cel) => {
         const c = cel as any;
+        if (c.isMerged && c.master && c.master.address !== c.address) return;
+        if (c.type === 1) return;
         if (ehFormula(c)) {
           const v = c.value;
           const resultado = v && typeof v === "object" ? v.result : undefined;
@@ -494,7 +500,9 @@ export async function gerarNddPreenchido(
   let n = 0;
   const escreve = (cel: string, valor: string | number) => {
     if (valor === "" || valor === null || valor === undefined) return;
-    aba.getCell(cel).value = valor;
+    let c = aba.getCell(cel);
+    if (c.isMerged && c.master) c = c.master;
+    c.value = valor;
     n++;
   };
 
@@ -553,14 +561,16 @@ export async function gerarNddPreenchido(
       return;
     }
     // Se a célula for E49 ou puramente numérica, grava como Number real para que fórmulas dependentes calculem
+    let c = aba.getCell(celula);
+    if (c.isMerged && c.master) c = c.master;
     const numReal = paraNumero(valor);
     if ((celula === "E49" || m.transformacao === "multiplicacao_base") && numReal !== null) {
-      aba.getCell(celula).value = numReal;
+      c.value = numReal;
       if (!Number.isInteger(numReal)) {
-        aba.getCell(celula).numFmt = "0.00";
+        c.numFmt = "0.00";
       }
     } else {
-      aba.getCell(celula).value = valor;
+      c.value = valor;
     }
     n++;
     escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
