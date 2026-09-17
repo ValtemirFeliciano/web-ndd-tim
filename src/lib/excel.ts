@@ -303,19 +303,42 @@ function repararFormulasCompartilhadas(wb: Workbook, log: Logger): void {
       const v = c.value;
       return v && typeof v === "object" && typeof v.sharedFormula === "string";
     });
-    const mestresDaAba = celulasFormula.filter((c) => {
-      const v = c.value;
-      return (
-        v && typeof v === "object" && typeof v.formula === "string" && v.formula.length > 0 &&
-        typeof v.sharedFormula !== "string"
-      );
+
+    if (clonesDaAba.length === 0) {
+      log("info", `Varredura da aba "${aba.name}": ${total} célula(s), nenhuma fórmula compartilhada (clone) encontrada.`);
+      return;
+    }
+
+    // Coletar APENAS mestres que são realmente referenciados por clones
+    const mestresAlvo = new Set<string>();
+    clonesDaAba.forEach((cel) => {
+      const v = cel.value;
+      let addr: string | undefined = v.sharedFormula;
+      const vistos = new Set<string>();
+      while (addr && !vistos.has(addr)) {
+        vistos.add(addr);
+        const c = aba.getCell(addr) as any;
+        const cv = c?.value;
+        if (
+          cv && typeof cv === "object" && typeof cv.formula === "string" && cv.formula.length > 0 &&
+          typeof cv.sharedFormula !== "string"
+        ) {
+          mestresAlvo.add(addr);
+          break;
+        }
+        addr = cv && typeof cv === "object" && typeof cv.sharedFormula === "string" ? cv.sharedFormula : undefined;
+      }
     });
-    const outras = celulasFormula.length - clonesDaAba.length - mestresDaAba.length;
+
+    const limpaResultadoInvalido = (res: any) => {
+      if (res instanceof Date && isNaN(res.getTime())) return undefined;
+      if (typeof res === "number" && isNaN(res)) return undefined;
+      return res;
+    };
 
     // 1) CLONES primeiro (enquanto os mestres ainda têm o texto da fórmula)
     clonesDaAba.forEach((cel) => {
       const v = cel.value;
-      // localiza a célula-mestre (resolvendo cadeias de sharedFormula)
       let mestre: any = null;
       let addr: string | undefined = v.sharedFormula;
       const vistos = new Set<string>();
@@ -344,55 +367,31 @@ function repararFormulasCompartilhadas(wb: Workbook, log: Logger): void {
         }
       }
 
+      const resLimpo = limpaResultadoInvalido(v.result);
       if (nova !== null) {
-        cel.value = { formula: nova, result: v.result };
+        cel.value = { formula: nova, result: resLimpo };
         viraramFormula++;
       } else {
-        // sem mestre (ex.: célula-mestre sobrescrita no template) → valor calculado
-        cel.value = v.result !== undefined ? v.result : null;
+        cel.value = resLimpo !== undefined ? resLimpo : null;
         viraramValor++;
       }
       clones++;
     });
 
-    // 2) MESTRES → fórmula independente (remove shareType/ref do grupo)
-    mestresDaAba.forEach((c) => {
+    // 2) MESTRES apenas dos clones tratados (remove shareType/ref do grupo)
+    mestresAlvo.forEach((addr) => {
+      const c = aba.getCell(addr) as any;
       const v = c.value;
-      c.value = { formula: v.formula, result: v.result };
-      mestres++;
+      if (v && typeof v === "object" && typeof v.formula === "string") {
+        const resLimpo = limpaResultadoInvalido(v.result);
+        c.value = { formula: v.formula, result: resLimpo };
+        mestres++;
+      }
     });
-
-    // 3) RESÍDUO: células de fórmula que não expuseram .formula/.sharedFormula
-    //    no .value (defesa contra variações internas do ExcelJS). Neutraliza
-    //    via getters da própria célula — nenhuma fórmula compartilhada sobrevive.
-    const conjuntoTratado = new Set<any>([...clonesDaAba, ...mestresDaAba]);
-    celulasFormula
-      .filter((c) => !conjuntoTratado.has(c))
-      .forEach((c) => {
-        let f: string | null = null;
-        try {
-          f = typeof c.formula === "string" && c.formula.length > 0 ? c.formula : null;
-        } catch {
-          f = null;
-        }
-        if (f) {
-          c.value = { formula: f, result: c.result };
-        } else {
-          const r = (() => {
-            try {
-              return c.result;
-            } catch {
-              return null;
-            }
-          })();
-          c.value = r !== undefined && r !== null ? r : null;
-        }
-        outrasTratadas++;
-      });
 
     log(
       "info",
-      `Varredura da aba "${aba.name}": ${total} célula(s) · ${mestresDaAba.length} mestre(s) · ${clonesDaAba.length} clone(s) compartilhado(s)${outras > 0 ? ` · ${outras} outra(s) fórmula(s)` : ""}.`
+      `Varredura da aba "${aba.name}": ${total} célula(s) · ${mestresAlvo.size} mestre(s) desvinculado(s) · ${clonesDaAba.length} clone(s) compartilhado(s) tratado(s).`
     );
   });
 
@@ -403,7 +402,7 @@ function repararFormulasCompartilhadas(wb: Workbook, log: Logger): void {
   if (clones > 0 || mestres > 0 || outrasTratadas > 0) {
     log(
       "ok",
-      `Fórmulas compartilhadas neutralizadas ANTES da gravação: ${viraramFormula} clone(s) → fórmula independente (referências deslocadas como o Excel faria ao arrastar), ${viraramValor} clone(s) → valor estático, ${mestres} mestre(s) → fórmula independente${outrasTratadas > 0 ? `, ${outrasTratadas} residual(is) neutralizada(s)` : ""}. O erro "Shared Formula master" não pode mais ocorrer.`
+      `Fórmulas compartilhadas neutralizadas ANTES da gravação: ${viraramFormula} clone(s) → fórmula independente, ${viraramValor} clone(s) → valor estático, ${mestres} mestre(s) → fórmula independente. O erro "Shared Formula master" não pode mais ocorrer.`
     );
   }
 }
