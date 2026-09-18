@@ -407,7 +407,6 @@ function repararFormulasCompartilhadas(wb: Workbook, log: Logger): void {
   }
 }
 
-/** Modo de segurança extremo: transforma TODA fórmula em seu valor calculado. */
 function achatarFormulas(wb: Workbook): number {
   let n = 0;
   wb.worksheets.forEach((aba) => {
@@ -418,7 +417,10 @@ function achatarFormulas(wb: Workbook): number {
         if (c.type === 1) return;
         if (ehFormula(c)) {
           const v = c.value;
-          const resultado = v && typeof v === "object" ? v.result : undefined;
+          let resultado = v && typeof v === "object" ? v.result : undefined;
+          if (resultado instanceof Date && isNaN(resultado.getTime())) resultado = null;
+          if (typeof resultado === "number" && isNaN(resultado)) resultado = null;
+          if (resultado === "NaN") resultado = null;
           c.value = resultado !== undefined ? resultado : null;
           n++;
         }
@@ -426,6 +428,81 @@ function achatarFormulas(wb: Workbook): number {
     });
   });
   return n;
+}
+
+/**
+ * Sanitização universal pré-exportação:
+ * 1. Remove qualquer resultado ou valor que seja `NaN` ou `Invalid Date` (causador direto
+ *    do XML corrompido `<v>NaN</v>` que aciona o aviso de reparo no Microsoft Excel).
+ * 2. Células com fórmulas mantêm sua fórmula intacta, mas têm seu `result` limpo se for
+ *    inválido ou NaN, para que o Microsoft Excel calcule ao abrir (fullCalcOnLoad).
+ * 3. Garante que células escravas de intervalos mesclados não tenham resquícios de fórmula.
+ */
+function sanitizarPlanilhaParaExportacao(wb: Workbook, log: Logger): void {
+  let corrigidas = 0;
+  wb.worksheets.forEach((aba) => {
+    aba.eachRow({ includeEmpty: false }, (linha) => {
+      linha.eachCell({ includeEmpty: false }, (cel) => {
+        const c = cel as any;
+
+        // 1. Célula secundária (escrava) de mesclagem não deve carregar fórmula
+        if (c.isMerged && c.master && c.master.address !== c.address) {
+          if (c.value && typeof c.value === "object" && (c.value.formula || c.value.sharedFormula)) {
+            c.value = null;
+            corrigidas++;
+          }
+          if (c.model && (c.model.formula || c.model.sharedFormula)) {
+            delete c.model.formula;
+            delete c.model.sharedFormula;
+            delete c.model.result;
+          }
+          return;
+        }
+
+        const v = c.value;
+        const m = c.model;
+
+        // 2. Célula com fórmula: limpa result inválido (Invalid Date ou NaN)
+        if (v && typeof v === "object" && (v.formula || v.sharedFormula)) {
+          const resInvDate = v.result instanceof Date && isNaN(v.result.getTime());
+          const resNumNaN = typeof v.result === "number" && isNaN(v.result);
+          const resStrNaN = v.result === "NaN";
+          if (resInvDate || resNumNaN || resStrNaN) {
+            const novoObj = { ...v };
+            delete novoObj.result;
+            c.value = novoObj;
+            if (m) delete m.result;
+            corrigidas++;
+          }
+        } else if (v instanceof Date && isNaN(v.getTime())) {
+          // Valor data inválido direto
+          c.value = null;
+          if (m) delete m.value;
+          corrigidas++;
+        } else if (typeof v === "number" && isNaN(v)) {
+          // Valor numérico NaN direto
+          c.value = null;
+          if (m) delete m.value;
+          corrigidas++;
+        }
+
+        // 3. Checagem direta no model para máxima garantia contra serialização defeituosa do ExcelJS
+        if (m) {
+          if (m.result instanceof Date && isNaN(m.result.getTime())) delete m.result;
+          if (typeof m.result === "number" && isNaN(m.result)) delete m.result;
+          if (m.result === "NaN") delete m.result;
+
+          if (m.value instanceof Date && isNaN(m.value.getTime())) delete m.value;
+          if (typeof m.value === "number" && isNaN(m.value)) delete m.value;
+          if (m.value === "NaN") delete m.value;
+        }
+      });
+    });
+  });
+
+  if (corrigidas > 0) {
+    log("info", `Sanitização pré-exportação: ${corrigidas} célula(s) corrigida(s) para prevenir corrupção no Excel.`);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -629,6 +706,10 @@ export async function gerarNddPreenchido(
   // OBS: Resumo de Equipamentos e tabela de Gabinete/VSAT NÃO são tocados,
   // preservando as fórmulas do template original — igual ao seu código.
 
+  // Sanitização universal de todas as abas e células antes de serializar:
+  // limpa valores NaN e datas inválidas que provocam erro de reparo no Excel
+  sanitizarPlanilhaParaExportacao(wb, log);
+
   let buffer: any;
   try {
     buffer = await wb.xlsx.writeBuffer();
@@ -637,6 +718,7 @@ export async function gerarNddPreenchido(
     log("warn", `1ª serialização falhou: "${e1?.message ?? e1}". Ativando modo de segurança (fórmulas → valores)…`);
     try {
       const achatadas = achatarFormulas(wb);
+      sanitizarPlanilhaParaExportacao(wb, log);
       log(
         "warn",
         `Modo de segurança aplicado: ${achatadas} célula(s) de fórmula convertidas em valores estáticos. O arquivo será gerado, mas as fórmulas desta cópia não recalcularão (os valores exibidos são os últimos calculados pelo Excel).`
