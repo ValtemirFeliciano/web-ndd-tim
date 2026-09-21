@@ -215,13 +215,13 @@ function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipInde
       if (destino === "dimensoes_compostas") {
         const decomposto = decomporDimensoes(val);
         if (decomposto) {
-          if (decomposto.comprimento && !resultado["comprimento"]) resultado["comprimento"] = decomposto.comprimento;
-          if (decomposto.largura && !resultado["largura"]) resultado["largura"] = decomposto.largura;
-          if (decomposto.profundidade && !resultado["profundidade"]) resultado["profundidade"] = decomposto.profundidade;
+          if (decomposto.comprimento && (!resultado["comprimento"] || resultado["comprimento"] === "-")) resultado["comprimento"] = decomposto.comprimento;
+          if (decomposto.largura && (!resultado["largura"] || resultado["largura"] === "-")) resultado["largura"] = decomposto.largura;
+          if (decomposto.profundidade && (!resultado["profundidade"] || resultado["profundidade"] === "-")) resultado["profundidade"] = decomposto.profundidade;
           log("info", `Equipamento #${equipIndex + 1}: dimensões compostas "${val}" decompostas em comprimento/largura/profundidade`);
         }
       } else {
-        if (!resultado[destino]) {
+        if (!resultado[destino] || resultado[destino] === "-") {
           resultado[destino] = val;
         }
       }
@@ -305,6 +305,39 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
       ca: s(eComAliases?.ca) || "-",
       aev_com_ca: s(eComAliases?.aev_com_ca),
     };
+
+    // Regra específica para antenas MW (Micro-ondas / Parábolas):
+    // A dimensão física é o diâmetro da parábola e deve SEMPRE ficar na coluna Profundidade (Prof.),
+    // e as colunas Comprimento e Largura devem ficar como "-".
+    const tipoUpper = (eq.tipo_equipamento || "").toUpperCase().trim();
+    const modeloUpper = (eq.modelo || "").toUpperCase().trim();
+    const isMW = tipoUpper === "MW" ||
+                 tipoUpper.includes("MW") ||
+                 tipoUpper.includes("MICROONDAS") ||
+                 tipoUpper.includes("MICRO-ONDAS") ||
+                 modeloUpper.includes("MW") ||
+                 modeloUpper.includes("PARABOL");
+
+    if (isMW) {
+      // Captura o diâmetro de qualquer campo onde tenha sido extraído (profundidade, comprimento ou largura)
+      let diametro = "-";
+      if (eq.profundidade && eq.profundidade !== "-") {
+        diametro = eq.profundidade;
+      } else if (eq.comprimento && eq.comprimento !== "-") {
+        diametro = eq.comprimento;
+      } else if (eq.largura && eq.largura !== "-") {
+        diametro = eq.largura;
+      }
+
+      eq.profundidade = diametro;
+      eq.comprimento = "-";
+      eq.largura = "-";
+
+      if (diametro !== "-") {
+        log("info", `Equipamento #${i + 1} (${eq.tipo_equipamento}): diâmetro "${diametro}" posicionado na coluna Profundidade (Comprimento e Largura = "-")`);
+      }
+    }
+
     if (!eq.tipo_equipamento && !eq.modelo) {
       log("warn", `Equipamento #${i + 1} veio sem tipo e sem modelo — pode ser linha de resumo da tabela.`);
     }

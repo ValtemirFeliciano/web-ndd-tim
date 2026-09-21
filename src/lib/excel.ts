@@ -677,13 +677,29 @@ export async function gerarNddPreenchido(
       const largM = paraMetros(eq.largura);
       const profM = paraMetros(eq.profundidade);
 
-      if (compM !== null) escreveNumero(aba, `I${L}`, compM, 2);
-      else escreve(`I${L}`, eq.comprimento || "-");
+      // Proteção para antenas MW (micro-ondas / parábolas):
+      // A dimensão é o diâmetro da parábola e deve ficar EXCLUSIVAMENTE na coluna PROF. (m) [K].
+      // Colunas ALTURA (m) [I] e LARGURA (m) [J] devem ficar com "-".
+      const isMW = (eq.tipo_equipamento || "").toUpperCase().includes("MW");
+      let finalCompM = compM;
+      let finalLargM = largM;
+      let finalProfM = profM;
 
-      if (largM !== null) escreveNumero(aba, `J${L}`, largM, 2);
-      else escreve(`J${L}`, eq.largura || "-");
+      if (isMW) {
+        if (finalProfM === null) {
+          finalProfM = finalCompM !== null ? finalCompM : finalLargM;
+        }
+        finalCompM = null;
+        finalLargM = null;
+      }
 
-      if (profM !== null) escreveNumero(aba, `K${L}`, profM, 2);
+      if (finalCompM !== null) escreveNumero(aba, `I${L}`, finalCompM, 2);
+      else escreve(`I${L}`, isMW ? "-" : (eq.comprimento || "-"));
+
+      if (finalLargM !== null) escreveNumero(aba, `J${L}`, finalLargM, 2);
+      else escreve(`J${L}`, isMW ? "-" : (eq.largura || "-"));
+
+      if (finalProfM !== null) escreveNumero(aba, `K${L}`, finalProfM, 2);
       else escreve(`K${L}`, eq.profundidade || "-");
 
       if (!escreveNumero(aba, `L${L}`, eq.rad_center, 2)) escreve(`L${L}`, eq.rad_center);

@@ -70,19 +70,19 @@ function aliasesPadrao(): AliasColuna[] {
     { id: novoId(), campoSistema: "azimute", aliasPdf: "AZIMUTE" },
     { id: novoId(), campoSistema: "azimute", aliasPdf: "Az" },
     { id: novoId(), campoSistema: "azimute", aliasPdf: "Azim" },
-    { id: novoId(), campoSistema: "comprimento", aliasPdf: "DIMENSÕES" },
-    { id: novoId(), campoSistema: "comprimento", aliasPdf: "DIMENSÕES (mm)" },
     { id: novoId(), campoSistema: "comprimento", aliasPdf: "Length" },
     { id: novoId(), campoSistema: "comprimento", aliasPdf: "Height" },
     { id: novoId(), campoSistema: "comprimento", aliasPdf: "Alt" },
-    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES" },
-    { id: novoId(), campoSistema: "largura", aliasPdf: "DIMENSÕES (mm)" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Comp" },
+    { id: novoId(), campoSistema: "comprimento", aliasPdf: "Comprimento" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Larg" },
     { id: novoId(), campoSistema: "largura", aliasPdf: "Width" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "DIMENSÕES" },
-    { id: novoId(), campoSistema: "profundidade", aliasPdf: "DIMENSÕES (mm)" },
+    { id: novoId(), campoSistema: "largura", aliasPdf: "Largura" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "Prof" },
     { id: novoId(), campoSistema: "profundidade", aliasPdf: "Depth" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Profundidade" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Diâmetro" },
+    { id: novoId(), campoSistema: "profundidade", aliasPdf: "Diametro" },
     { id: novoId(), campoSistema: "rad_center", aliasPdf: "COTA" },
     { id: novoId(), campoSistema: "rad_center", aliasPdf: "RAD CENTER" },
     { id: novoId(), campoSistema: "rad_center", aliasPdf: "RadCenter" },
@@ -106,10 +106,14 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
 4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento.
    - Extraia os dados brutos exatamente como aparecem nas colunas (não faça conversões manuais).
    - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "MODULO", "MW", "GPS", "TMA") para o campo "tipo_equipamento". NUNCA deixe vazio se houver valor na célula (ex: para equipamentos RRU onde constar "MODULO", extraia "MODULO").
-   - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000").
-   - A coluna "DIMENSÕES (mm)" traz as medidas físicas (ex: "1400 x 320 x 145" ou "600").
+   - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000" ou "59,0000" ou "60,0000").
+   - A coluna "DIMENSÕES (mm)" traz as medidas físicas (ex: "2500 x 355 x 192", "560 x 308 x 133" ou "900"):
+     * Para antenas com 3 dimensões (ex: RF ou MODULO "2500 x 355 x 192"): comprimento="2500", largura="355", profundidade="192".
+     * REGRA CRÍTICA PARA ANTENAS MW (Micro-ondas / Parábola / Diâmetro único ex: "900" ou "600"):
+       - O valor da dimensão/diâmetro DEVE OBRIGATORIAMENTE ser gravado no campo "profundidade" (ex: "900").
+       - Os campos "comprimento" e "largura" DEVEM OBRIGATORIAMENTE ficar como "-".
+       - NUNCA coloque o diâmetro ou dimensão da antena MW nos campos "comprimento" ou "largura".
    - A coluna "ARRASTO" corresponde ao coeficiente "ca" (ex: "1.2" ou "1.6").
-   - Para antena MW com dimensão única (ex: "600"), extraia como profundidade.
    - Mantenha os valores de AEV como aparecem no documento.
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO" "PARA IMPLANTAÇÃO" ou "A INSTALAR".
@@ -176,11 +180,15 @@ export function carregarConfig(): ConfigAutomacao {
     }
 
     let instrucoes = typeof j.instrucoes === "string" ? j.instrucoes : INSTRUCOES_PADRAO;
-    if (!instrucoes.includes("MODULO") && !instrucoes.includes("TIPO DE ANTENA")) {
+    if (
+      !instrucoes.includes("MODULO") ||
+      !instrucoes.includes("TIPO DE ANTENA") ||
+      !instrucoes.includes("REGRA CRÍTICA PARA ANTENAS MW")
+    ) {
       instrucoes = INSTRUCOES_PADRAO;
     }
 
-    const aliasesCarregados =
+    let aliasesCarregados =
       Array.isArray(j.aliasesColunas) && j.aliasesColunas.length > 0
         ? j.aliasesColunas.map((a: any) => ({
             id: String(a.id ?? novoId()),
@@ -188,6 +196,12 @@ export function carregarConfig(): ConfigAutomacao {
             aliasPdf: String(a.aliasPdf ?? "").trim(),
           }))
         : aliasesPadrao();
+
+    // Remove aliases legados conflitantes onde "DIMENSÕES" foi mapeado para colunas individuais
+    aliasesCarregados = aliasesCarregados.filter((a: any) => {
+      const aliasNorm = (a?.aliasPdf ?? "").toUpperCase().trim();
+      return !aliasNorm.startsWith("DIMENS");
+    });
 
     // Garante que aliases essenciais de tipo estejam sempre presentes
     const temAlias = (nome: string) => aliasesCarregados.some((a: any) => a.aliasPdf.toUpperCase() === nome.toUpperCase());
@@ -273,11 +287,13 @@ CAMPOS A EXTRAIR:
 ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 
 TABELA DE EQUIPAMENTOS (Página 3): extraia um objeto por equipamento com os valores brutos da tabela de carregamento.
+- Para antenas celulares de 3 dimensões (ex: "RF" ou "MODULO" "2500 x 355 x 192"): preencha comprimento, largura e profundidade com cada medida.
+- Para antenas MW (micro-ondas / parábolas com diâmetro único, ex: "900" ou "600"): coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
 Não faça conversões manuais de unidades — a aplicação fará a normalização, decomposição e conversão de mm para metros automaticamente.
 
 REGRAS FINAIS:
 1. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.
-2. Responda APENAS com o JSON abaixo. SEM crases, SEM bloco \`\`\`json, SEM texto antes ou depois.
+2. Responda APENAS com o JSON abaixo. SEM crases, SEM bloco ```json, SEM texto antes ou depois.
 
 FORMATO EXATO DA RESPOSTA:
 {
