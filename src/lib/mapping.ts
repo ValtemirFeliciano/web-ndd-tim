@@ -103,18 +103,21 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    - No carimbo, o endereço costuma vir em linha única separado por hífens (ex: "VC CAFÉ DO POVO - CRISTO VIVO - BREU BRANCO - PA CEP:68695-000").
    - Isole no campo "endereco" APENAS o logradouro/rua/vicinal/estrada (ex: "VC CAFÉ DO POVO"). NUNCA repita o bairro, cidade, UF ou CEP dentro do campo "endereco".
    - Extraia separadamente: "bairro" (ex: "CRISTO VIVO" ou "Zona Rural"), "cidade" (ex: "BREU BRANCO"), "uf" (sigla com 2 letras, ex: "PA"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -3.413902 e -49.042893, sem símbolos ° ou letras N/S/E/W).
-4. TABELA DE EQUIPAMENTOS (Página 3): um objeto por equipamento.
-   - Extraia os dados brutos exatamente como aparecem nas colunas (não faça conversões manuais).
+4. TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"):
+   - Leia a tabela linha por linha com fidelidade óptica rigorosa:
    - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "MODULO", "MW", "GPS", "TMA") para o campo "tipo_equipamento". NUNCA deixe vazio se houver valor na célula (ex: para equipamentos RRU onde constar "MODULO", extraia "MODULO").
    - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000" ou "59,0000" ou "60,0000").
-   - A coluna "DIMENSÕES (mm)" traz as medidas físicas (ex: "2500 x 355 x 192", "560 x 308 x 133" ou "900"):
-     * Para antenas com 3 dimensões (ex: RF ou MODULO "2500 x 355 x 192"): comprimento="2500", largura="355", profundidade="192".
+   - A coluna "AZIMUTE (N.V.)": copie exatamente o valor numérico que antecede o "°". NUNCA assuma 0° para o setor Alpha quando houver outro valor na célula (ex: na linha 1 o azimute é 160°, não 0°).
+   - A coluna "DIMENSÕES (mm)":
+     * Para antenas com 3 dimensões (ex: RF "2500 x 355 x 192" ou MODULO "560 x 308 x 133"): preencha comprimento="2500", largura="355", profundidade="192".
      * REGRA CRÍTICA PARA ANTENAS MW (Micro-ondas / Parábola / Diâmetro único ex: "900" ou "600"):
        - O valor da dimensão/diâmetro DEVE OBRIGATORIAMENTE ser gravado no campo "profundidade" (ex: "900").
        - Os campos "comprimento" e "largura" DEVEM OBRIGATORIAMENTE ficar como "-".
        - NUNCA coloque o diâmetro ou dimensão da antena MW nos campos "comprimento" ou "largura".
-   - A coluna "ARRASTO" corresponde ao coeficiente "ca" (ex: "1.2" ou "1.6").
-   - Mantenha os valores de AEV como aparecem no documento.
+   - As colunas de ÁREA DE EXPOSIÇÃO e ARRASTO:
+     * "ÁREA DE EXPOSIÇÃO (m²)" -> campo "aev_sem_ca" (ex: "0.888", "0.172", "0.636"). CUIDADO para não confundir o dígito '0' com '6' (ex: copie "0.172" e NUNCA "6.17").
+     * "ARRASTO" -> campo "ca" (ex: "1.2" ou "1.6").
+     * "ÁREA DE EXPOSIÇÃO COM ARRASTO (m²)" -> campo "aev_com_ca" (ex: "1.065", "0.207", "1.018").
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO" "PARA IMPLANTAÇÃO" ou "A INSTALAR".
    - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
@@ -183,7 +186,7 @@ export function carregarConfig(): ConfigAutomacao {
     if (
       !instrucoes.includes("MODULO") ||
       !instrucoes.includes("TIPO DE ANTENA") ||
-      !instrucoes.includes("REGRA CRÍTICA PARA ANTENAS MW")
+      !instrucoes.includes("fidelidade óptica rigorosa")
     ) {
       instrucoes = INSTRUCOES_PADRAO;
     }
@@ -286,9 +289,10 @@ ${cfg.instrucoes.trim() || "(nenhuma instrução adicional)"}
 CAMPOS A EXTRAIR:
 ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 
-TABELA DE EQUIPAMENTOS (Página 3): extraia um objeto por equipamento com os valores brutos da tabela de carregamento.
-- Para antenas celulares de 3 dimensões (ex: "RF" ou "MODULO" "2500 x 355 x 192"): preencha comprimento, largura e profundidade com cada medida.
-- Para antenas MW (micro-ondas / parábolas com diâmetro único, ex: "900" ou "600"): coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
+TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"): extraia um objeto por equipamento com os valores brutos da tabela de carregamento.
+- AZIMUTE: copie rigorosamente o valor que antecede o "°" na coluna AZIMUTE (ex: "160" e NUNCA "0" quando a célula indicar 160°; "220"; "340"). Se estiver "-" use "-".
+- DIMENSÕES: para antenas celulares de 3 dimensões (ex: "2500 x 355 x 192"), preencha comprimento, largura e profundidade com cada medida. Para antenas MW com diâmetro único (ex: "900" ou "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
+- AEV: copie os valores decimais com atenção redobrada aos dígitos (ex: "0.172" e NUNCA "6.17").
 Não faça conversões manuais de unidades — a aplicação fará a normalização, decomposição e conversão de mm para metros automaticamente.
 
 REGRAS FINAIS:

@@ -680,7 +680,8 @@ export async function gerarNddPreenchido(
       // Proteção para antenas MW (micro-ondas / parábolas):
       // A dimensão é o diâmetro da parábola e deve ficar EXCLUSIVAMENTE na coluna PROF. (m) [K].
       // Colunas ALTURA (m) [I] e LARGURA (m) [J] devem ficar com "-".
-      const isMW = (eq.tipo_equipamento || "").toUpperCase().includes("MW");
+      const tipoU = (eq.tipo_equipamento || "").toUpperCase();
+      const isMW = tipoU.includes("MW") || tipoU.includes("MICRO") || tipoU.includes("PARABOL");
       let finalCompM = compM;
       let finalLargM = largM;
       let finalProfM = profM;

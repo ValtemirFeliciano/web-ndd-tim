@@ -161,17 +161,30 @@ function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipInde
     length: "comprimento",
     height: "comprimento",
     alt: "comprimento",
+    comp: "comprimento",
+    c: "comprimento",
     largura: "largura",
     larg: "largura",
     width: "largura",
+    l: "largura",
     profundidade: "profundidade",
     prof: "profundidade",
     depth: "profundidade",
+    p: "profundidade",
+    espessura: "profundidade",
+    diametro: "profundidade",
+    diam: "profundidade",
 
     // Dimensões compostas
     dimensoes: "dimensoes_compostas",
     dimensions: "dimensoes_compostas",
     dimensoesmm: "dimensoes_compostas",
+    dimensoesm: "dimensoes_compostas",
+    dimensoesaxlxp: "dimensoes_compostas",
+    dimensao: "dimensoes_compostas",
+    dim: "dimensoes_compostas",
+    medidas: "dimensoes_compostas",
+    medida: "dimensoes_compostas",
 
     // Arrasto e AEV
     ca: "ca",
@@ -212,18 +225,18 @@ function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipInde
 
     const destino = mapaCanonico[sKey];
     if (destino) {
-      if (destino === "dimensoes_compostas") {
+      if (destino === "dimensoes_compostas" || (destino === "comprimento" && typeof val === "string" && /[xX×*\/]/.test(val))) {
         const decomposto = decomporDimensoes(val);
         if (decomposto) {
           if (decomposto.comprimento && (!resultado["comprimento"] || resultado["comprimento"] === "-")) resultado["comprimento"] = decomposto.comprimento;
           if (decomposto.largura && (!resultado["largura"] || resultado["largura"] === "-")) resultado["largura"] = decomposto.largura;
           if (decomposto.profundidade && (!resultado["profundidade"] || resultado["profundidade"] === "-")) resultado["profundidade"] = decomposto.profundidade;
           log("info", `Equipamento #${equipIndex + 1}: dimensões compostas "${val}" decompostas em comprimento/largura/profundidade`);
+          continue;
         }
-      } else {
-        if (!resultado[destino] || resultado[destino] === "-") {
-          resultado[destino] = val;
-        }
+      }
+      if (!resultado[destino] || resultado[destino] === "-") {
+        resultado[destino] = val;
       }
     } else {
       resultado[sKey] = val;
@@ -275,12 +288,19 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     const eComAliases = aplicarAliases(e, aliases, log, i);
 
     let tipoEquip = s(eComAliases?.tipo_equipamento);
+    if (tipoEquip.toUpperCase() === "RRU") {
+      tipoEquip = "MODULO";
+    } else if (["MICROONDAS", "MICRO-ONDAS", "MICRO ONDAS", "PARABOLA", "PARABÓLICA"].includes(tipoEquip.toUpperCase())) {
+      tipoEquip = "MW";
+    }
+
     // Se o tipo_equipamento ficou vazio ou "-", verificar se veio em alguma chave com valor conhecido ou inferir por modelo
     if (!tipoEquip || tipoEquip === "-") {
-      // 1. Procura se algum valor do objeto retornado é "MODULO", "RF", "MW", "GPS" ou "TMA"
+      // 1. Procura se algum valor do objeto retornado é "MODULO", "RF", "MW", "GPS", "TMA", "ODU" ou "RRU"
       for (const [k, v] of Object.entries(e ?? {})) {
-        if (typeof v === "string" && ["MODULO", "RF", "MW", "GPS", "TMA"].includes(v.trim().toUpperCase())) {
-          tipoEquip = v.trim().toUpperCase();
+        if (typeof v === "string" && ["MODULO", "RF", "MW", "GPS", "TMA", "ODU", "RRU"].includes(v.trim().toUpperCase())) {
+          const valUpper = v.trim().toUpperCase();
+          tipoEquip = valUpper === "RRU" ? "MODULO" : valUpper;
           log("info", `Equipamento #${i + 1}: tipo recuperado da chave "${k}" ("${v}") → tipo_equipamento`);
           break;
         }
@@ -306,7 +326,35 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
       aev_com_ca: s(eComAliases?.aev_com_ca),
     };
 
-    // Regra específica para antenas MW (Micro-ondas / Parábolas):
+    // 1. Se comprimento contiver string com múltiplos valores (ex: "2500 x 355 x 192" ou "1400x320x145"):
+    if (eq.comprimento && /[xX×*\/]/.test(eq.comprimento)) {
+      const dec = decomporDimensoes(eq.comprimento);
+      if (dec) {
+        if (dec.comprimento) eq.comprimento = dec.comprimento;
+        if (dec.largura) eq.largura = dec.largura;
+        if (dec.profundidade) eq.profundidade = dec.profundidade;
+        log("info", `Equipamento #${i + 1}: string composta em comprimento decomposta com sucesso`);
+      }
+    }
+
+    // 2. Se largura ou profundidade continuarem vazias ("-"), varre todas as chaves procurando string composta:
+    if (!eq.profundidade || eq.profundidade === "-" || !eq.largura || eq.largura === "-") {
+      const todosCampos = { ...(e ?? {}), ...(eComAliases ?? {}) };
+      for (const [k, v] of Object.entries(todosCampos)) {
+        if (typeof v === "string" && /[xX×*\/]/.test(v)) {
+          const dec = decomporDimensoes(v);
+          if (dec && (dec.comprimento || dec.profundidade)) {
+            if ((!eq.comprimento || eq.comprimento === "-") && dec.comprimento) eq.comprimento = dec.comprimento;
+            if ((!eq.largura || eq.largura === "-") && dec.largura) eq.largura = dec.largura;
+            if ((!eq.profundidade || eq.profundidade === "-") && dec.profundidade) eq.profundidade = dec.profundidade;
+            log("info", `Equipamento #${i + 1}: dimensões recuperadas do campo "${k}" ("${v}")`);
+            break;
+          }
+        }
+      }
+    }
+
+    // 3. Regra específica para antenas MW (Micro-ondas / Parábolas):
     // A dimensão física é o diâmetro da parábola e deve SEMPRE ficar na coluna Profundidade (Prof.),
     // e as colunas Comprimento e Largura devem ficar como "-".
     const tipoUpper = (eq.tipo_equipamento || "").toUpperCase().trim();
@@ -315,7 +363,12 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
                  tipoUpper.includes("MW") ||
                  tipoUpper.includes("MICROONDAS") ||
                  tipoUpper.includes("MICRO-ONDAS") ||
+                 tipoUpper.includes("MICRO ONDAS") ||
+                 tipoUpper.includes("PARABOL") ||
+                 tipoUpper.includes("ENLACE") ||
                  modeloUpper.includes("MW") ||
+                 modeloUpper.includes("MINI-LINK") ||
+                 modeloUpper.includes("MINILINK") ||
                  modeloUpper.includes("PARABOL");
 
     if (isMW) {
@@ -327,6 +380,18 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
         diametro = eq.comprimento;
       } else if (eq.largura && eq.largura !== "-") {
         diametro = eq.largura;
+      } else {
+        const todosCampos = { ...(e ?? {}), ...(eComAliases ?? {}) };
+        for (const [k, v] of Object.entries(todosCampos)) {
+          const sK = simplificarChave(k);
+          if (sK.includes("dimens") || sK.includes("diam") || sK.includes("medid") || sK.includes("tam")) {
+            const dec = decomporDimensoes(String(v));
+            if (dec?.profundidade) {
+              diametro = dec.profundidade;
+              break;
+            }
+          }
+        }
       }
 
       eq.profundidade = diametro;
@@ -335,6 +400,21 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
 
       if (diametro !== "-") {
         log("info", `Equipamento #${i + 1} (${eq.tipo_equipamento}): diâmetro "${diametro}" posicionado na coluna Profundidade (Comprimento e Largura = "-")`);
+      }
+    }
+
+    // 4. Sanity Check para AEV sem CA e AEV com CA:
+    // Pela física da engenharia de estruturas, AEV com CA = AEV sem CA * CA (onde CA >= 1.0).
+    // Se a IA confundiu o dígito '0.' com '6.' na leitura óptica (ex: "6.17" em vez de "0.172"):
+    if (eq.aev_sem_ca && eq.aev_com_ca) {
+      const numSem = parseFloat(String(eq.aev_sem_ca).replace(",", "."));
+      const numCom = parseFloat(String(eq.aev_com_ca).replace(",", "."));
+      if (!isNaN(numSem) && !isNaN(numCom) && numCom > 0 && numSem > numCom * 1.5) {
+        if (String(eq.aev_sem_ca).startsWith("6.") && numCom < 1.0) {
+          const corrigido = "0." + String(eq.aev_sem_ca).slice(2);
+          log("warn", `Equipamento #${i + 1}: OCR corrigido para AEV s/CA ("${eq.aev_sem_ca}" → "${corrigido}") baseado em AEV c/CA ("${eq.aev_com_ca}")`);
+          eq.aev_sem_ca = corrigido;
+        }
       }
     }
 
