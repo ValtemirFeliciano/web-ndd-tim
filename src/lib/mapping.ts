@@ -293,7 +293,7 @@ Não faça conversões manuais de unidades — a aplicação fará a normalizaç
 
 REGRAS FINAIS:
 1. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.
-2. Responda APENAS com o JSON abaixo. SEM crases, SEM bloco ```json, SEM texto antes ou depois.
+2. Responda APENAS com o JSON abaixo. SEM crases, SEM bloco \`\`\`json, SEM texto antes ou depois.
 
 FORMATO EXATO DA RESPOSTA:
 {
