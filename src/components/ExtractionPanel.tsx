@@ -49,18 +49,18 @@ function Grupo({ titulo, icone, children }: { titulo: string; icone: React.React
   );
 }
 
-const COLS_EQ: { chave: keyof Equipamento; rotulo: string; w: string }[] = [
-  { chave: "tipo_equipamento", rotulo: "Tipo", w: "w-28" },
-  { chave: "modelo", rotulo: "Modelo", w: "w-32" },
-  { chave: "qtde", rotulo: "Qtde", w: "w-14" },
-  { chave: "azimute", rotulo: "Azimute", w: "w-18" },
-  { chave: "comprimento", rotulo: "Compr.", w: "w-16" },
-  { chave: "largura", rotulo: "Larg.", w: "w-16" },
-  { chave: "profundidade", rotulo: "Prof.", w: "w-16" },
-  { chave: "rad_center", rotulo: "Rad.Ctr", w: "w-20" },
-  { chave: "aev_sem_ca", rotulo: "AEV s/CA", w: "w-20" },
-  { chave: "ca", rotulo: "CA", w: "w-14" },
-  { chave: "aev_com_ca", rotulo: "AEV c/CA", w: "w-20" },
+const COLS_EQ: { chave: keyof Equipamento; rotulo: string; minW: string; align?: string }[] = [
+  { chave: "tipo_equipamento", rotulo: "Tipo", minW: "min-w-[100px]" },
+  { chave: "modelo", rotulo: "Modelo", minW: "min-w-[180px]" },
+  { chave: "qtde", rotulo: "Qtde", minW: "min-w-[55px]", align: "text-center" },
+  { chave: "azimute", rotulo: "Azimute", minW: "min-w-[130px]", align: "text-center" },
+  { chave: "comprimento", rotulo: "Compr.", minW: "min-w-[80px]", align: "text-center" },
+  { chave: "largura", rotulo: "Larg.", minW: "min-w-[80px]", align: "text-center" },
+  { chave: "profundidade", rotulo: "Prof.", minW: "min-w-[80px]", align: "text-center" },
+  { chave: "rad_center", rotulo: "Rad.Ctr", minW: "min-w-[90px]", align: "text-center" },
+  { chave: "aev_sem_ca", rotulo: "AEV s/CA", minW: "min-w-[95px]", align: "text-center" },
+  { chave: "ca", rotulo: "CA", minW: "min-w-[65px]", align: "text-center" },
+  { chave: "aev_com_ca", rotulo: "AEV c/CA", minW: "min-w-[95px]", align: "text-center" },
 ];
 
 export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip, onAddEquip, onRemoveEquip, onExtra }: Props) {
@@ -159,39 +159,39 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
             nenhum equipamento extraído — adicione manualmente abaixo
           </p>
         ) : (
-          <div className="overflow-x-auto rounded border border-ink-600">
+          <div className="overflow-x-auto rounded border border-ink-600 shadow-inner">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="bg-ink-800">
-                  <th className="px-2 py-1.5 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">#</th>
+                <tr className="bg-ink-800/90">
+                  <th className="w-10 px-2.5 py-2 text-center font-mono text-[9px] uppercase tracking-wider text-mist-500">#</th>
                   {COLS_EQ.map((c) => (
-                    <th key={c.chave} className="px-2 py-1.5 text-left font-mono text-[9px] uppercase tracking-wider text-mist-500">
+                    <th key={c.chave} className={`px-2 py-2 font-mono text-[9px] uppercase tracking-wider text-mist-500 ${c.align ?? "text-left"} ${c.minW}`}>
                       {c.rotulo}
                     </th>
                   ))}
-                  <th className="w-8 px-1 py-1.5" />
+                  <th className="w-10 px-1 py-2 text-center" />
                 </tr>
               </thead>
               <tbody>
                 {dados.equipamentos.map((eq, i) => (
-                  <tr key={i} className="border-t border-ink-700 transition-colors hover:bg-cyan-400/5">
-                    <td className="px-2 py-1 font-mono text-[10px] text-amber-500">{String(i + 1).padStart(2, "0")}</td>
+                  <tr key={i} className="border-t border-ink-700/80 transition-colors hover:bg-cyan-400/5">
+                    <td className="px-2 py-1.5 text-center font-mono text-[10px] font-semibold text-amber-400">{String(i + 1).padStart(2, "0")}</td>
                     {COLS_EQ.map((c) => (
-                      <td key={c.chave} className="px-1 py-1">
+                      <td key={c.chave} className={`px-1.5 py-1.5 ${c.minW}`}>
                         <input
                           value={String(eq[c.chave] ?? "")}
                           onChange={(e) => onEquip(i, c.chave, e.target.value)}
-                          className={`field-input w-full px-1.5 py-1 font-mono text-[11px] ${c.w} ${eq[c.chave] ? "" : "input-empty"}`}
+                          className={`field-input w-full px-2 py-1.5 font-mono text-xs ${c.align ?? "text-left"} ${eq[c.chave] ? "" : "input-empty"}`}
                         />
                       </td>
                     ))}
-                    <td className="px-1 py-1">
+                    <td className="px-1.5 py-1.5 text-center">
                       <button
                         onClick={() => onRemoveEquip(i)}
-                        className="grid h-6 w-6 place-items-center rounded border border-ink-600 text-mist-500 transition-colors hover:border-err-400 hover:text-err-400"
+                        className="mx-auto grid h-7 w-7 place-items-center rounded border border-ink-600 text-mist-500 transition-colors hover:border-err-400 hover:text-err-400"
                         title="Remover equipamento"
                       >
-                        <Trash2 size={11} />
+                        <Trash2 size={12} />
                       </button>
                     </td>
                   </tr>

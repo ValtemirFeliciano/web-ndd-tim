@@ -7,12 +7,12 @@ import DebugConsole from "./components/DebugConsole";
 import ConfigPage from "./components/ConfigPage";
 import { extrairDoPdf, listarModelos, testarConexao, validarDados, MODELOS_PADRAO } from "./lib/gemini";
 import { gerarNddPreenchido, baixarBlob } from "./lib/excel";
-import { carregarConfig, salvarConfig, montarPromptFinal } from "./lib/mapping";
+import { carregarConfig, salvarConfig, montarPromptFinal, INSTRUCOES_BTS, INSTRUCOES_COLLO } from "./lib/mapping";
 import { logger } from "./lib/logger";
 import {
   EQUIPAMENTO_VAZIO,
   type ArquivoInfo, type ConfigAutomacao, type DadosPPI, type Equipamento, type LogEntry, type LogLevel,
-  type ResultadoExtracao, type StepId, type StepStatus, type TemplateInfo,
+  type ResultadoExtracao, type StepId, type StepStatus, type TemplateInfo, type TipoProjeto,
 } from "./types";
 
 const LS_CONFIG = "nddforge.config.v1";
@@ -102,7 +102,22 @@ export default function App() {
   const [pagina, setPagina] = useState<"extracao" | "config">("extracao");
   const [cfg, setCfg] = useState<ConfigAutomacao>(() => carregarConfig());
   const primeiroRenderCfg = useRef(true);
-  const promptFinal = useMemo(() => montarPromptFinal(cfg), [cfg]);
+  const promptFinal = useMemo(() => montarPromptFinal(cfg, cfg.tipoProjeto), [cfg]);
+
+  const aoMudarTipoProjeto = (t: TipoProjeto) => {
+    setCfg((prev) => {
+      const novaCfg: ConfigAutomacao = {
+        ...prev,
+        tipoProjeto: t,
+        instrucoes: t === "collo"
+          ? (prev.instrucoesCollo?.trim() || INSTRUCOES_COLLO)
+          : (prev.instrucoesBts?.trim() || prev.instrucoes?.trim() || INSTRUCOES_BTS),
+      };
+      salvarConfig(novaCfg);
+      return novaCfg;
+    });
+    log("info", `Modo de projeto alterado para: ${t.toUpperCase()} (${t === "collo" ? "Compartilhamento / Colocation" : "Site Novo / Greenfield"}).`);
+  };
 
   useEffect(() => {
     if (primeiroRenderCfg.current) {
@@ -418,12 +433,20 @@ export default function App() {
         listando={listando}
         pagina={pagina}
         onPagina={setPagina}
+        tipoProjeto={cfg.tipoProjeto ?? "bts"}
+        onTipoProjetoChange={aoMudarTipoProjeto}
       />
 
       {pagina === "config" ? (
-        <ConfigPage cfg={cfg} onChange={setCfg} onVoltar={() => setPagina("extracao")} />
+        <ConfigPage
+          cfg={cfg}
+          onChange={setCfg}
+          onVoltar={() => setPagina("extracao")}
+          tipoProjeto={cfg.tipoProjeto ?? "bts"}
+          onTipoProjetoChange={aoMudarTipoProjeto}
+        />
       ) : (
-      <main className="mx-auto grid min-w-0 max-w-7xl gap-6 overflow-hidden px-4 py-8 sm:px-6 lg:grid-cols-[400px_1fr]">
+      <main className="mx-auto grid min-w-0 max-w-[1840px] w-full gap-6 px-4 py-7 sm:px-6 lg:px-8 xl:px-10 lg:grid-cols-[390px_1fr] xl:grid-cols-[420px_1fr]">
         {/* ============ coluna esquerda: entrada ============ */}
         <div className="min-w-0 grid content-start gap-5">
           <div className="rise-in">
@@ -438,6 +461,17 @@ export default function App() {
               A IA lê carimbo, coordenadas e a tabela de equipamentos do projeto executivo
               e grava nas <span className="font-mono text-xs text-mist-300">mesmas células</span> do seu Apps Script — D7, C9, P9, linha 23…
             </p>
+          </div>
+
+          <div className="rise-in flex items-center justify-between rounded-md border border-ink-600 bg-ink-850/80 px-3.5 py-2" style={{ animationDelay: "0.06s" }}>
+            <span className="font-mono text-[10px] uppercase tracking-wider text-mist-400">
+              Perfil Ativo:
+            </span>
+            <span className={`inline-flex items-center gap-1.5 font-display text-xs font-bold uppercase tracking-wide ${
+              (cfg.tipoProjeto ?? "bts") === "collo" ? "text-cyan-300" : "text-amber-400"
+            }`}>
+              {(cfg.tipoProjeto ?? "bts") === "collo" ? "📡 COLLO · Compartilhamento" : "🗼 BTS · Site Novo"}
+            </span>
           </div>
 
           <div className="rise-in" style={{ animationDelay: "0.08s" }}>
@@ -662,7 +696,7 @@ export default function App() {
       )}
 
       <footer className="border-t border-ink-600/60 py-5">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2 px-4 font-mono text-[10px] uppercase tracking-wider text-mist-600 sm:px-6">
+        <div className="mx-auto flex max-w-[1840px] w-full flex-wrap items-center justify-between gap-2 px-4 font-mono text-[10px] uppercase tracking-wider text-mist-600 sm:px-6 lg:px-8 xl:px-10">
           <p>
             <span className="text-amber-500">NDDFORGE</span> · PPI → NDD · o PDF vai direto do seu navegador para a API do Google
           </p>

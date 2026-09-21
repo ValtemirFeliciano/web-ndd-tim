@@ -1,4 +1,4 @@
-import type { AliasColuna, CampoMapeamento, ConfigAutomacao } from "../types";
+import type { AliasColuna, CampoMapeamento, ConfigAutomacao, TipoProjeto } from "../types";
 
 /* ------------------------------------------------------------------ */
 /*  Mapa de células — antes vivia hardcoded em src/lib/excel.ts.       */
@@ -142,8 +142,46 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
 6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
 7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
 
+export const INSTRUCOES_BTS = INSTRUCOES_PADRAO;
+
+export const INSTRUCOES_COLLO = `1. CARIMBO ("SITE:"):
+   - Se houver rótulo explícito (ex: "WINITY: SELGRCOLLO1"), use o código da detentora/torreora = "site_id_detentor".
+   - Se houver rótulo explícito (ex: "TIM: SZ-LGARK6"), use o código da operadora = "site_id_cliente".
+   - Se vier sem rótulo (apenas duas linhas): primeira linha = "site_id_detentor", segunda linha = "site_id_cliente".
+2. ALTURA DA EV (TORRE EXISTENTE):
+   - Em projetos de COLLO (colocation/compartilhamento), a torre já existe fisicamente.
+   - Procure a cota total no TOPO da torre na elevação/fachada (Folha 03 / Página 3), indicada por cota de nível (ex: "+40,00" ou "+50,00" ou cota total de altura). Use essa altura total (ex: "40" ou "50"). NUNCA confunda com a cota de instalação das antenas (ex: 33m). Se não encontrar, use "40".
+3. LOCALIZAÇÃO E ENDEREÇO (Carimbo):
+   - Isole no campo "endereco" APENAS o logradouro/rua/vicinal/estrada (ex: "RUA JOSÉ FRANCISCO DOS SANTOS, S/N"). NUNCA repita o bairro, cidade, UF ou CEP dentro do campo "endereco".
+   - Extraia separadamente: "bairro" (ex: "COLÔNIA 13" ou "Zona Rural"), "cidade" (ex: "LAGARTO"), "uf" (sigla com 2 letras, ex: "SE"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -10.986597 e -37.547600, sem símbolos ° ou letras N/S/E/W).
+4. TABELA DE EQUIPAMENTOS (Página 3 / Folha 03):
+   - REGRA CRÍTICA DE SELEÇÃO: Na Folha 03 aparecem duas tabelas: "CARREGAMENTO ANTENAS EXISTENTES" e "CARREGAMENTO TIM - À INSTALAR".
+   - Extraia EXCLUSIVAMENTE os equipamentos da tabela "CARREGAMENTO TIM - À INSTALAR" (ou "CARREGAMENTO TIM A INSTALAR" / "PROJETADO").
+   - IGNORE COMPLETAMENTE a tabela "CARREGAMENTO ANTENAS EXISTENTES" (antenas legadas ou de terceiros NÃO devem entrar).
+   - Para cada linha da tabela "CARREGAMENTO TIM - À INSTALAR":
+     * A coluna "TIPO DE ANTENA" (ou "TIPO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "RRU", "MW", "GPS", "MODULO"). (Nota: RRU será tratado como MODULO).
+     * A coluna "ALTURA": cota de instalação na torre (ex: "33,00" ou "33") -> mapeie para "rad_center".
+     * A coluna "QUANT.": extraia a quantidade exata indicada na célula (ex: "03" -> "3", "02" -> "2").
+     * A coluna "AZIMUTE (N.V.)": copie exatamente o valor da célula. Quando os setores vierem agrupados em uma única linha (ex: "125°/230°/315°"), copie a sequência completa (ex: "125/230/315"). Mantenha a linha agrupada.
+     * A coluna "DIMENSÕES (mm)":
+       - Para equipamentos com 3 medidas (ex: "710 x 400 x 192", "1500 x 450 x 192", "630 x 480 x 100"): preencha comprimento, largura e profundidade com cada valor respectivo.
+       - Para antenas MW com diâmetro único (ex: "600", "900"): o diâmetro DEVE OBRIGATORIAMENTE ser gravado em "profundidade", mantendo "comprimento" e "largura" como "-".
+     * Colunas ÁREA DE EXPOSIÇÃO e ARRASTO:
+       - "ÁREA DE EXPOSIÇÃO (m²)" -> campo "aev_sem_ca" (ex: "0.852", "2.025", "0.605").
+       - "ARRASTO" -> campo "ca" (ex: "1.2" ou "1.6").
+       - "ÁREA DE EXPOSIÇÃO COM ARRASTO (m²)" -> campo "aev_com_ca" (ex: "1.022", "2.430", "0.726").
+5. ÁREA DE INSTALAÇÃO DO GABINETE / SOLO:
+   - Procure na LEGENDA da Planta Civil (Página 2 / Folha 02) o item de base de concreto para equipamentos TIM (ex: "1. BASE EM CONCRETO 1,0x1,0m PARA IMPLANTAÇÃO DO EQUIPAMENTO OPSS 1P - A INSTALAR").
+   - Extraia a QUANTIDADE de bases (ex: "1") -> campo "nx_base"
+   - Extraia as DIMENSÕES da base (ex: "1,00x1,00" ou "1,0x1,0") -> campo "di_base"
+6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
+7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
+
 export const CONFIG_PADRAO: ConfigAutomacao = {
-  instrucoes: INSTRUCOES_PADRAO,
+  tipoProjeto: "bts",
+  instrucoesBts: INSTRUCOES_BTS,
+  instrucoesCollo: INSTRUCOES_COLLO,
+  instrucoes: INSTRUCOES_BTS,
   mapeamento: mapeamentoPadrao(),
   linhaInicialEq: 23,
   aliasesColunas: aliasesPadrao(),
@@ -182,14 +220,20 @@ export function carregarConfig(): ConfigAutomacao {
       });
     }
 
-    let instrucoes = typeof j.instrucoes === "string" ? j.instrucoes : INSTRUCOES_PADRAO;
-    if (
-      !instrucoes.includes("MODULO") ||
-      !instrucoes.includes("TIPO DE ANTENA") ||
-      !instrucoes.includes("fidelidade óptica rigorosa")
-    ) {
-      instrucoes = INSTRUCOES_PADRAO;
+    const tipoProjeto: TipoProjeto = j.tipoProjeto === "collo" ? "collo" : "bts";
+
+    let instrucoesBts = typeof j.instrucoesBts === "string" && j.instrucoesBts.trim() ? j.instrucoesBts : "";
+    if (!instrucoesBts || !instrucoesBts.includes("fidelidade óptica rigorosa")) {
+      instrucoesBts = typeof j.instrucoes === "string" && j.instrucoes.includes("fidelidade óptica rigorosa")
+        ? j.instrucoes
+        : INSTRUCOES_BTS;
     }
+
+    let instrucoesCollo = typeof j.instrucoesCollo === "string" && j.instrucoesCollo.trim()
+      ? j.instrucoesCollo
+      : INSTRUCOES_COLLO;
+
+    const instrucoesAtivas = tipoProjeto === "collo" ? instrucoesCollo : instrucoesBts;
 
     let aliasesCarregados =
       Array.isArray(j.aliasesColunas) && j.aliasesColunas.length > 0
@@ -219,7 +263,10 @@ export function carregarConfig(): ConfigAutomacao {
     }
 
     return {
-      instrucoes,
+      tipoProjeto,
+      instrucoesBts,
+      instrucoesCollo,
+      instrucoes: instrucoesAtivas,
       mapeamento: mapCarregado,
       linhaInicialEq: Number(j.linhaInicialEq) > 0 ? Number(j.linhaInicialEq) : 23,
       aliasesColunas: aliasesCarregados,
@@ -231,7 +278,15 @@ export function carregarConfig(): ConfigAutomacao {
 
 export function salvarConfig(cfg: ConfigAutomacao): void {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(cfg));
+    const tipo = cfg.tipoProjeto ?? "bts";
+    const cfgParaSalvar: ConfigAutomacao = {
+      ...cfg,
+      tipoProjeto: tipo,
+      instrucoesBts: cfg.instrucoesBts || INSTRUCOES_BTS,
+      instrucoesCollo: cfg.instrucoesCollo || INSTRUCOES_COLLO,
+      instrucoes: tipo === "collo" ? (cfg.instrucoesCollo || INSTRUCOES_COLLO) : (cfg.instrucoesBts || INSTRUCOES_BTS),
+    };
+    localStorage.setItem(LS_KEY, JSON.stringify(cfgParaSalvar));
   } catch {
     /* quota cheia — ignora */
   }
@@ -239,7 +294,10 @@ export function salvarConfig(cfg: ConfigAutomacao): void {
 
 export function resetarConfig(): ConfigAutomacao {
   const c: ConfigAutomacao = {
-    instrucoes: INSTRUCOES_PADRAO,
+    tipoProjeto: "bts",
+    instrucoesBts: INSTRUCOES_BTS,
+    instrucoesCollo: INSTRUCOES_COLLO,
+    instrucoes: INSTRUCOES_BTS,
     mapeamento: mapeamentoPadrao(),
     linhaInicialEq: 23,
     aliasesColunas: aliasesPadrao(),
@@ -254,10 +312,10 @@ export function resetarConfig(): ConfigAutomacao {
 
 /**
  * Monta o prompt completo enviado ao Gemini a partir da configuração do
- * usuário. O schema JSON é GERADO daqui — assim o prompt nunca fica
- * dessincronizado do que será gravado na planilha.
+ * usuário e do tipo de projeto ativo (BTS ou COLLO).
  */
-export function montarPromptFinal(cfg: ConfigAutomacao): string {
+export function montarPromptFinal(cfg: ConfigAutomacao, tipoProjeto?: TipoProjeto): string {
+  const tipo = tipoProjeto ?? cfg.tipoProjeto ?? "bts";
   const camposDoSchema: string[] = [];
 
   // Coletar apenas os campos que precisam ser extraídos (sem células)
@@ -280,19 +338,35 @@ export function montarPromptFinal(cfg: ConfigAutomacao): string {
 
   const schemaCampos = camposDoSchema.map((c) => `  "${c}": "",`).join("\n");
 
-  return `Você é um engenheiro de telecomunicações sênior analisando este Projeto Executivo (PPI) em PDF.
+  const instrucoesAtivas = tipo === "collo"
+    ? (cfg.instrucoesCollo?.trim() || INSTRUCOES_COLLO)
+    : (cfg.instrucoesBts?.trim() || cfg.instrucoes?.trim() || INSTRUCOES_BTS);
+
+  const tituloTabelaEquip = tipo === "collo"
+    ? 'TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO TIM - À INSTALAR"):'
+    : 'TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"):';
+
+  const detalheTabelaEquip = tipo === "collo"
+    ? `extraia um objeto por equipamento com os valores brutos da tabela de carregamento da TIM.
+IMPORTANTE: Extraia APENAS os equipamentos da tabela "CARREGAMENTO TIM - À INSTALAR" e IGNORE completamente a tabela de equipamentos existentes.
+- AZIMUTE: se os setores vierem agrupados na mesma linha (ex: "125°/230°/315°"), copie a sequência ("125/230/315"). Mantenha a linha agrupada com sua respectiva QUANT.
+- DIMENSÕES: para antenas de 3 dimensões (ex: "710 x 400 x 192"), preencha comprimento, largura e profundidade com cada medida. Para antenas MW com diâmetro único (ex: "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
+- AEV: copie os valores decimais com atenção redobrada aos dígitos (ex: "0.852", "2.025", "0.605").`
+    : `extraia um objeto por equipamento com os valores brutos da tabela de carregamento.
+- AZIMUTE: copie rigorosamente o valor que antecede o "°" na coluna AZIMUTE (ex: "160" e NUNCA "0" quando a célula indicar 160°; "220"; "340"). Se estiver "-" use "-".
+- DIMENSÕES: para antenas celulares de 3 dimensões (ex: "2500 x 355 x 192"), preencha comprimento, largura e profundidade com cada medida. Para antenas MW com diâmetro único (ex: "900" ou "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
+- AEV: copie os valores decimais com atenção redobrada aos dígitos (ex: "0.172" e NUNCA "6.17").`;
+
+  return `Você é um engenheiro de telecomunicações sênior analisando este Projeto Executivo (PPI) em PDF do tipo ${tipo.toUpperCase()} (${tipo === "collo" ? "Compartilhamento / Colocation" : "Site Novo / Greenfield"}).
 Extraia os dados técnicos com base no carimbo, desenhos, legendas e tabelas (foco nas páginas 1, 2 e 3).
 
-INSTRUÇÕES DE EXTRAÇÃO:
-${cfg.instrucoes.trim() || "(nenhuma instrução adicional)"}
+INSTRUÇÕES DE EXTRAÇÃO (${tipo.toUpperCase()}):
+${instrucoesAtivas}
 
 CAMPOS A EXTRAIR:
 ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 
-TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"): extraia um objeto por equipamento com os valores brutos da tabela de carregamento.
-- AZIMUTE: copie rigorosamente o valor que antecede o "°" na coluna AZIMUTE (ex: "160" e NUNCA "0" quando a célula indicar 160°; "220"; "340"). Se estiver "-" use "-".
-- DIMENSÕES: para antenas celulares de 3 dimensões (ex: "2500 x 355 x 192"), preencha comprimento, largura e profundidade com cada medida. Para antenas MW com diâmetro único (ex: "900" ou "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
-- AEV: copie os valores decimais com atenção redobrada aos dígitos (ex: "0.172" e NUNCA "6.17").
+${tituloTabelaEquip} ${detalheTabelaEquip}
 Não faça conversões manuais de unidades — a aplicação fará a normalização, decomposição e conversão de mm para metros automaticamente.
 
 REGRAS FINAIS:
@@ -304,9 +378,9 @@ FORMATO EXATO DA RESPOSTA:
 ${schemaCampos || '  "site_id_cliente": "",'}
   "rastreabilidade": {
     "origem_site_id": "Páginas 1, 2 e 3 — carimbo SITE",
-    "origem_altura_torre": "Página 2 item 03 e Página 3 elevação",
-    "origem_equipamentos": "Página 3  — tabela de carregamento",
-    "base_em_concreto":   "Página 2 e 9  — LEGENDA da Planta Civil/Planta Baixo/Radier"
+    "origem_altura_torre": "${tipo === "collo" ? "Página 3 cota do topo da elevação da torre" : "Página 2 item 03 e Página 3 elevação"}",
+    "origem_equipamentos": "${tipo === "collo" ? "Página 3 — tabela CARREGAMENTO TIM - À INSTALAR" : "Página 3 — tabela de carregamento"}",
+    "base_em_concreto":   "Página 2 e 9 — LEGENDA da Planta Civil/Planta Baixo/Radier"
   },
   "equipamentos": [
     {

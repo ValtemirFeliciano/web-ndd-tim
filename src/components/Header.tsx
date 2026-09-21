@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ExternalLink, FileCog, KeyRound, Radar, RefreshCw, ScanLine, Zap } from "lucide-react";
+import { ChevronDown, ExternalLink, FileCog, KeyRound, Radar, Radio, RefreshCw, ScanLine, Share2, Zap } from "lucide-react";
 import { MODELOS_PADRAO } from "../lib/gemini";
+import type { TipoProjeto } from "../types";
 
 export interface TesteState {
   status: "idle" | "busy" | "ok" | "erro";
@@ -19,6 +20,8 @@ interface Props {
   listando: boolean;
   pagina: "extracao" | "config";
   onPagina: (p: "extracao" | "config") => void;
+  tipoProjeto: TipoProjeto;
+  onTipoProjetoChange: (t: TipoProjeto) => void;
 }
 
 function LogoTorre({ varredura }: { varredura: boolean }) {
@@ -41,6 +44,7 @@ function LogoTorre({ varredura }: { varredura: boolean }) {
 
 export default function Header({
   apiKey, modelo, modelos, onApiKeyChange, onModeloChange, onListarModelos, onTestar, teste, listando, pagina, onPagina,
+  tipoProjeto, onTipoProjetoChange,
 }: Props) {
   const [aberto, setAberto] = useState(false);
   const [mostrarChave, setMostrarChave] = useState(false);
@@ -62,7 +66,7 @@ export default function Header({
 
   return (
     <header className="sticky top-0 z-40 border-b border-ink-600/70 bg-ink-900/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3 sm:px-6">
+      <div className="mx-auto flex max-w-[1840px] w-full items-center gap-4 px-4 py-3 sm:px-6 lg:px-8 xl:px-10">
         <LogoTorre varredura={teste.status === "busy"} />
         <div className="min-w-0">
           <h1 className="font-display text-lg font-bold leading-none tracking-tight text-mist-100">
@@ -73,13 +77,43 @@ export default function Header({
           </p>
         </div>
 
-        <nav className="ml-4 hidden items-center gap-1 rounded-md border border-ink-600 bg-ink-850 p-1 sm:flex">
+        {/* Seletor de Tipo de Projeto: BTS vs COLLO */}
+        <div className="ml-2 flex items-center rounded-md border border-ink-600 bg-ink-850 p-1">
+          <button
+            type="button"
+            onClick={() => onTipoProjetoChange("bts")}
+            className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 font-display text-xs font-semibold transition-all ${
+              tipoProjeto === "bts"
+                ? "bg-amber-500 text-ink-950 shadow-[0_2px_10px_-2px_rgba(255,178,36,0.5)]"
+                : "text-mist-400 hover:text-amber-400"
+            }`}
+            title="BTS: Site Novo / Greenfield (regra padrão)"
+          >
+            <Radio size={13} />
+            BTS
+          </button>
+          <button
+            type="button"
+            onClick={() => onTipoProjetoChange("collo")}
+            className={`flex items-center gap-1.5 rounded px-2.5 py-1.5 font-display text-xs font-semibold transition-all ${
+              tipoProjeto === "collo"
+                ? "bg-cyan-400 text-ink-950 shadow-[0_2px_10px_-2px_rgba(34,211,238,0.5)]"
+                : "text-mist-400 hover:text-cyan-300"
+            }`}
+            title="COLLO: Colocation / Compartilhamento de Infraestrutura (antenas novas da TIM)"
+          >
+            <Share2 size={13} />
+            COLLO
+          </button>
+        </div>
+
+        <nav className="ml-2 hidden items-center gap-1 rounded-md border border-ink-600 bg-ink-850 p-1 sm:flex">
           <button
             onClick={() => onPagina("extracao")}
             className={`flex items-center gap-1.5 rounded px-3 py-1.5 font-display text-xs font-semibold transition-all ${
               pagina === "extracao"
-                ? "bg-amber-500 text-ink-950 shadow-[0_2px_10px_-2px_rgba(255,178,36,0.5)]"
-                : "text-mist-300 hover:text-amber-400"
+                ? "bg-ink-700 text-mist-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.5)]"
+                : "text-mist-400 hover:text-mist-200"
             }`}
           >
             <ScanLine size={13} />
@@ -89,8 +123,8 @@ export default function Header({
             onClick={() => onPagina("config")}
             className={`flex items-center gap-1.5 rounded px-3 py-1.5 font-display text-xs font-semibold transition-all ${
               pagina === "config"
-                ? "bg-cyan-400 text-ink-950 shadow-[0_2px_10px_-2px_rgba(34,211,238,0.5)]"
-                : "text-mist-300 hover:text-cyan-300"
+                ? "bg-ink-700 text-mist-100 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.5)]"
+                : "text-mist-400 hover:text-mist-200"
             }`}
           >
             <FileCog size={13} />
@@ -132,7 +166,7 @@ export default function Header({
 
       {aberto && (
         <div className="fade-in border-t border-ink-600/70 bg-ink-850/95">
-          <div className="mx-auto grid max-w-7xl gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[1fr_280px]">
+          <div className="mx-auto grid max-w-[1840px] w-full gap-4 px-4 py-4 sm:px-6 lg:px-8 xl:px-10 lg:grid-cols-[1fr_280px]">
             <div className="grid gap-3 sm:grid-cols-[1fr_220px]">
               <div>
                 <label className="mb-1 block font-mono text-[10px] uppercase tracking-[0.18em] text-mist-500">

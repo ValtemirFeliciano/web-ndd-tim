@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle, ArrowLeft, Check, ChevronDown, Copy, FileCog, ListChecks, Plus,
-  RotateCcw, Save, Sparkles, Table2, Trash2, Wand2,
+  Radio, RotateCcw, Save, Share2, Sparkles, Table2, Trash2, Wand2,
 } from "lucide-react";
-import type { AliasColuna, CampoMapeamento, ConfigAutomacao } from "../types";
+import type { AliasColuna, CampoMapeamento, ConfigAutomacao, TipoProjeto } from "../types";
 import {
-  CAMPOS_CONHECIDOS, DESCRICOES_CAMPOS, INSTRUCOES_PADRAO,
+  CAMPOS_CONHECIDOS, DESCRICOES_CAMPOS, INSTRUCOES_PADRAO, INSTRUCOES_BTS, INSTRUCOES_COLLO,
   montarPromptFinal, validarConfig,
 } from "../lib/mapping";
 
@@ -13,6 +13,8 @@ interface Props {
   cfg: ConfigAutomacao;
   onChange: (c: ConfigAutomacao) => void;
   onVoltar: () => void;
+  tipoProjeto?: TipoProjeto;
+  onTipoProjetoChange?: (t: TipoProjeto) => void;
 }
 
 let seqLocal = 0;
@@ -53,12 +55,13 @@ function Secao({
   );
 }
 
-export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
+export default function ConfigPage({ cfg, onChange, onVoltar, tipoProjeto, onTipoProjetoChange }: Props) {
   const [copiado, setCopiado] = useState(false);
   const [salvoFlash, setSalvoFlash] = useState(false);
   const [mostrarPrompt, setMostrarPrompt] = useState(true);
+  const [abaInstrucoes, setAbaInstrucoes] = useState<TipoProjeto>(tipoProjeto ?? cfg.tipoProjeto ?? "bts");
 
-  const promptFinal = useMemo(() => montarPromptFinal(cfg), [cfg]);
+  const promptFinal = useMemo(() => montarPromptFinal(cfg, abaInstrucoes), [cfg, abaInstrucoes]);
   const avisos = useMemo(() => validarConfig(cfg), [cfg]);
 
   /* feedback visual de auto-save (o App persiste com debounce) */
@@ -93,7 +96,21 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
   const adicionarAlias = () =>
     onChange({ ...cfg, aliasesColunas: [...cfg.aliasesColunas, { id: novoId(), campoSistema: "", aliasPdf: "" }] });
 
-  const restaurarInstrucoes = () => onChange({ ...cfg, instrucoes: INSTRUCOES_PADRAO });
+  const restaurarInstrucoes = () => {
+    if (abaInstrucoes === "collo") {
+      onChange({
+        ...cfg,
+        instrucoesCollo: INSTRUCOES_COLLO,
+        instrucoes: cfg.tipoProjeto === "collo" ? INSTRUCOES_COLLO : cfg.instrucoes,
+      });
+    } else {
+      onChange({
+        ...cfg,
+        instrucoesBts: INSTRUCOES_BTS,
+        instrucoes: cfg.tipoProjeto === "bts" ? INSTRUCOES_BTS : cfg.instrucoes,
+      });
+    }
+  };
 
   const copiarPrompt = async () => {
     try {
@@ -113,7 +130,7 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
   const camposUsados = Array.from(new Set(cfg.mapeamento.map((m) => m.campo.trim()).filter(Boolean)));
 
   return (
-    <main className="mx-auto grid max-w-5xl content-start gap-5 px-4 py-8 sm:px-6">
+    <main className="mx-auto grid max-w-[1840px] w-full content-start gap-5 px-4 py-8 sm:px-6 lg:px-8 xl:px-10">
       {/* cabeçalho da página */}
       <div className="rise-in flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -406,26 +423,85 @@ export default function ConfigPage({ cfg, onChange, onVoltar }: Props) {
         titulo="Instruções de extração (o que a IA procura)"
         icone={<Wand2 size={15} />}
         extra={
-          <button
-            onClick={restaurarInstrucoes}
-            className="flex items-center gap-1 rounded border border-ink-500 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-mist-400 transition-colors hover:border-amber-500 hover:text-amber-400"
-          >
-            <RotateCcw size={10} /> instruções padrão
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center rounded border border-ink-600 bg-ink-900 p-0.5 font-mono text-[9px]">
+              <button
+                type="button"
+                onClick={() => {
+                  setAbaInstrucoes("bts");
+                  onTipoProjetoChange?.("bts");
+                }}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider transition-all ${
+                  abaInstrucoes === "bts"
+                    ? "bg-amber-500 text-ink-950 shadow-[0_2px_8px_-2px_rgba(255,178,36,0.5)]"
+                    : "text-mist-400 hover:text-amber-400"
+                }`}
+              >
+                <Radio size={10} /> BTS
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAbaInstrucoes("collo");
+                  onTipoProjetoChange?.("collo");
+                }}
+                className={`flex items-center gap-1 rounded px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider transition-all ${
+                  abaInstrucoes === "collo"
+                    ? "bg-cyan-400 text-ink-950 shadow-[0_2px_8px_-2px_rgba(34,211,238,0.5)]"
+                    : "text-mist-400 hover:text-cyan-300"
+                }`}
+              >
+                <Share2 size={10} /> COLLO
+              </button>
+            </div>
+            <button
+              onClick={restaurarInstrucoes}
+              className="flex items-center gap-1 rounded border border-ink-500 px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider text-mist-400 transition-colors hover:border-amber-500 hover:text-amber-400"
+              title={`Restaurar instruções padrão de ${abaInstrucoes.toUpperCase()}`}
+            >
+              <RotateCcw size={10} /> padrão {abaInstrucoes.toUpperCase()}
+            </button>
+          </div>
         }
       >
-        <p className="mb-2 font-mono text-[10px] leading-relaxed text-mist-500">
-          Regras livres que vão no topo do prompt. O <span className="text-cyan-300">mapa de células acima</span> e o{" "}
-          <span className="text-cyan-300">schema JSON</span> são injetados automaticamente — não precisa repeti-los aqui.
-        </p>
+        <div className="mb-2.5 flex items-center justify-between">
+          <p className="font-mono text-[10px] leading-relaxed text-mist-500">
+            Regras para perfil <span className={`font-bold uppercase ${abaInstrucoes === "collo" ? "text-cyan-300" : "text-amber-400"}`}>
+              {abaInstrucoes === "collo" ? "COLLO (Compartilhamento)" : "BTS (Site Novo)"}
+            </span>. O mapa de células e o schema JSON são injetados automaticamente.
+          </p>
+        </div>
         <textarea
-          value={cfg.instrucoes}
-          onChange={(e) => onChange({ ...cfg, instrucoes: e.target.value })}
+          value={
+            abaInstrucoes === "collo"
+              ? (cfg.instrucoesCollo || INSTRUCOES_COLLO)
+              : (cfg.instrucoesBts || cfg.instrucoes || INSTRUCOES_BTS)
+          }
+          onChange={(e) => {
+            const val = e.target.value;
+            if (abaInstrucoes === "collo") {
+              onChange({
+                ...cfg,
+                instrucoesCollo: val,
+                instrucoes: cfg.tipoProjeto === "collo" ? val : cfg.instrucoes,
+              });
+            } else {
+              onChange({
+                ...cfg,
+                instrucoesBts: val,
+                instrucoes: cfg.tipoProjeto === "bts" ? val : cfg.instrucoes,
+              });
+            }
+          }}
           rows={11}
           spellCheck={false}
           className="field-input w-full resize-y px-3 py-2.5 font-mono text-[11px] leading-relaxed text-mist-200"
         />
-        <p className="mt-1 text-right font-mono text-[9px] text-mist-600">{cfg.instrucoes.length} caracteres</p>
+        <p className="mt-1 text-right font-mono text-[9px] text-mist-600">
+          {(abaInstrucoes === "collo"
+            ? (cfg.instrucoesCollo || INSTRUCOES_COLLO)
+            : (cfg.instrucoesBts || cfg.instrucoes || INSTRUCOES_BTS)).length} caracteres
+        </p>
       </Secao>
 
       {/* ============ 3. PROMPT FINAL ============ */}

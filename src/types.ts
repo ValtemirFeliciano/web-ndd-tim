@@ -67,9 +67,17 @@ export interface CampoMapeamento {
   transformacao?: string;
 }
 
+export type TipoProjeto = "bts" | "collo";
+
 /** Tudo o que o usuário personaliza na página de Configuração. */
 export interface ConfigAutomacao {
-  /** instruções de domínio injetadas no prompt da IA */
+  /** Tipo de projeto ativo ("bts" | "collo") */
+  tipoProjeto?: TipoProjeto;
+  /** Instruções específicas para BTS */
+  instrucoesBts?: string;
+  /** Instruções específicas para COLLO */
+  instrucoesCollo?: string;
+  /** instruções de domínio injetadas no prompt da IA (mantido para retrocompatibilidade) */
   instrucoes: string;
   mapeamento: CampoMapeamento[];
   /** linha da planilha onde começa a tabela de equipamentos */
