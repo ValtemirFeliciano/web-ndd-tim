@@ -1,7 +1,13 @@
 import type { AliasColuna, ArquivoInfo, DadosPPI, Equipamento, LogLevel } from "../types";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
-export const MODELOS_PADRAO = ["gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-2.0-flash"];
+export const MODELO_FALLBACK_503 = "gemini-3.1-flash-lite";
+export const MODELOS_PADRAO = [
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+];
 const MAX_TENTATIVAS_503 = 3;
 const LIMITE_INLINE_MB = 18; // margem de segurança abaixo dos 20MB da API
 
@@ -13,6 +19,7 @@ export interface ResultadoGemini {
   rawResponse: string;
   duracaoMs: number;
   tentativas: number;
+  modeloUsado?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -40,7 +47,7 @@ function descreverErroHttp(status: number, corpo: string): string {
     case 500:
       return `Erro interno do Google (500)${dicaApi}. Tente novamente.`;
     case 503:
-      return `Modelo sobrecarregado (503)${dicaApi}. O sistema já tenta 3x sozinho — se persistir, troque para outro modelo Flash.`;
+      return `Modelo sobrecarregado (503)${dicaApi}. O sistema tenta 3x sozinho e ativa fallback automático para ${MODELO_FALLBACK_503} — se persistir, aguarde 1 minuto.`;
     default:
       return `HTTP ${status}${dicaApi}.`;
   }
@@ -539,29 +546,65 @@ export async function extrairDoPdf(
   );
   log("info", `Payload montado: prompt (${prompt.length} chars) + PDF em base64 (${(arquivo.base64.length / 1024).toFixed(0)}KB, mime ${arquivo.mime}).`);
 
-  const url = `${BASE}/models/${modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
-
+  let modeloAtual = modelo;
   let corpo = "";
-  let tentativas = 0;
-  for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_503; tentativa++) {
-    tentativas = tentativa;
-    log("info", tentativa === 1 ? `POST → ${modelo} …` : `Tentativa ${tentativa}/${MAX_TENTATIVAS_503} após 503 …`);
-    const r = await postGemini(url, payload, log);
-    if (r.status === 503 && tentativa < MAX_TENTATIVAS_503) {
-      const espera = 4000 * tentativa;
-      log("warn", `503 (sobrecarga). Aguardando ${espera / 1000}s antes de repetir…`);
-      await dormir(espera);
-      continue;
+  let tentativasTotal = 0;
+
+  const tentarComModelo = async (mod: string, isFallback: boolean): Promise<boolean> => {
+    const url = `${BASE}/models/${mod}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_503; tentativa++) {
+      tentativasTotal++;
+      log(
+        "info",
+        tentativa === 1
+          ? `POST → ${mod}${isFallback ? " (fallback ativo)" : ""} …`
+          : `Tentativa ${tentativa}/${MAX_TENTATIVAS_503} em ${mod} após 503 …`
+      );
+      const r = await postGemini(url, payload, log);
+      if (r.status === 503) {
+        if (tentativa < MAX_TENTATIVAS_503) {
+          const espera = 4000 * tentativa;
+          log("warn", `503 (sobrecarga em ${mod}). Aguardando ${espera / 1000}s antes de repetir (${tentativa}/${MAX_TENTATIVAS_503})…`);
+          await dormir(espera);
+          continue;
+        } else {
+          log("warn", `503 (sobrecarga) persistiu por ${MAX_TENTATIVAS_503} tentativas consecutivas em ${mod}.`);
+          return false;
+        }
+      }
+      if (r.status !== 200) {
+        log("error", `HTTP ${r.status}`, r.corpo.slice(0, 1200));
+        const err: any = new Error(descreverErroHttp(r.status, r.corpo));
+        err.raw = r.corpo;
+        throw err;
+      }
+      corpo = r.corpo;
+      log("ok", `HTTP 200 — resposta recebida de ${mod} (${(corpo.length / 1024).toFixed(1)}KB)${tentativa > 1 ? ` na ${tentativa}ª tentativa` : ""}.`);
+      return true;
     }
-    if (r.status !== 200) {
-      log("error", `HTTP ${r.status}`, r.corpo.slice(0, 1200));
-      const err: any = new Error(descreverErroHttp(r.status, r.corpo));
-      err.raw = r.corpo;
-      throw err;
+    return false;
+  };
+
+  const sucessoPrimario = await tentarComModelo(modeloAtual, false);
+
+  if (!sucessoPrimario) {
+    if (modeloAtual !== MODELO_FALLBACK_503) {
+      log(
+        "warn",
+        `Erro 503 ocorreu mais de 3 vezes no modelo "${modeloAtual}". Ativando fallback automático para "${MODELO_FALLBACK_503}"…`
+      );
+      modeloAtual = MODELO_FALLBACK_503;
+      const sucessoFallback = await tentarComModelo(modeloAtual, true);
+      if (!sucessoFallback) {
+        const msg = `O modelo primário (${modelo}) e o fallback (${MODELO_FALLBACK_503}) estão sobrecarregados (503 persistente). Aguarde 1 minuto ou selecione outro modelo (ex: gemini-2.5-flash).`;
+        log("error", msg);
+        throw new Error(msg);
+      }
+    } else {
+      const msg = `O modelo ${modeloAtual} está temporariamente sobrecarregado (erro 503 persistente após ${MAX_TENTATIVAS_503} tentativas). Aguarde alguns instantes e tente novamente.`;
+      log("error", msg);
+      throw new Error(msg);
     }
-    corpo = r.corpo;
-    log("ok", `HTTP 200 — resposta recebida (${(corpo.length / 1024).toFixed(1)}KB)${tentativa > 1 ? ` na ${tentativa}ª tentativa` : ""}.`);
-    break;
   }
 
   let textoIA = "";
@@ -601,7 +644,7 @@ export async function extrairDoPdf(
 
   const dados = normalizarDados(bruto, log, aliases);
   const duracaoMs = Math.round(performance.now() - inicio);
-  return { dados, rawRequest, rawResponse: corpo, duracaoMs, tentativas };
+  return { dados, rawRequest, rawResponse: corpo, duracaoMs, tentativas: tentativasTotal, modeloUsado: modeloAtual };
 }
 
 /** Lista os modelos generateContent disponíveis para a chave. */

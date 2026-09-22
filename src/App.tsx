@@ -261,9 +261,10 @@ export default function App() {
 
       setDados(r.dados);
       setAvisos(av);
-      setMeta({ dados: r.dados, em: new Date().toISOString(), arquivo: ppi.nome, modelo, duracaoMs: r.duracaoMs, avisos: av });
+      setMeta({ dados: r.dados, em: new Date().toISOString(), arquivo: ppi.nome, modelo: r.modeloUsado ?? modelo, duracaoMs: r.duracaoMs, avisos: av });
       setFase("");
-      log("ok", `═══ Extração concluída em ${(r.duracaoMs / 1000).toFixed(1)}s (${r.tentativas} tentativa${r.tentativas > 1 ? "s" : ""}). Revise os dados e gere o Excel. ═══`);
+      const fallbackMsg = r.modeloUsado && r.modeloUsado !== modelo ? ` [fallback: ${r.modeloUsado}]` : "";
+      log("ok", `═══ Extração concluída em ${(r.duracaoMs / 1000).toFixed(1)}s (${r.tentativas} tentativa${r.tentativas > 1 ? "s" : ""}${fallbackMsg}). Revise os dados e gere o Excel. ═══`);
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       const falhaParse = /JSON|markdown|envelope/i.test(msg);
