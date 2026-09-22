@@ -113,11 +113,22 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    - Extraia separadamente: "bairro" (ex: "CRISTO VIVO" ou "Zona Rural"), "cidade" (ex: "BREU BRANCO"), "uf" (sigla com 2 letras, ex: "PA"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -3.413902 e -49.042893, sem símbolos ° ou letras N/S/E/W).
 4. TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"):
    - Leia a tabela linha por linha com fidelidade óptica rigorosa:
-   - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "RRU", "MODULO", "MW", "GPS", "TMA", "ODU") para o campo "tipo_equipamento". Copie com fidelidade o que estiver na célula (se estiver "RRU", extraia "RRU"; se estiver "MODULO", extraia "MODULO"). NUNCA deixe vazio se houver valor na célula.
+   - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula.
+     * "RF" -> extraia "RF"
+     * "RRU" -> extraia EXATAMENTE "RRU" (NUNCA troque por "MODULO"!)
+     * "ODU" -> extraia EXATAMENTE "ODU" (NUNCA troque por "MW"!)
+     * "MW" -> extraia EXATAMENTE "MW"
+     * "MODULO" -> extraia "MODULO" (apenas se a célula de tipo contiver literalmente "MODULO")
+     * "GPS" -> extraia "GPS"
+     * "TMA" -> extraia "TMA"
+     * NUNCA troque "RRU" por "MODULO" e NUNCA troque "ODU" por "MW"! Copie fielmente o que estiver impresso na coluna de tipo.
    - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000" ou "59,0000" ou "60,0000").
-   - A coluna "AZIMUTE (N.V.)": copie exatamente o valor numérico que antecede o "°". NUNCA assuma 0° para o setor Alpha quando houver outro valor na célula (ex: na linha 1 o azimute é 160°, não 0°).
+   - A coluna "QUANT.": extraia a quantidade exata indicada na célula (ex: "06" -> "6", "02" -> "2", "01" -> "1").
+   - A coluna "AZIMUTE (N.V.)":
+     * Copie exatamente o valor numérico que antecede o "°" para antenas direcionais (ex: 100°, 280°, 275°, 77°, 96°, 283°). NUNCA assuma 0° para o setor Alpha quando houver outro valor na célula.
+     * ATENÇÃO CRÍTICA (NÃO CONFUNDIR COM DIMENSÕES): Equipamentos como RRU, ODU, GPS e módulos NÃO possuem azimute e trazem hífen "-" na coluna AZIMUTE. NUNCA use a terceira dimensão (profundidade de 120, 84 ou 100 de "440 x 400 x 120" ou "151 x 151 x 84") no campo azimute! Se a coluna azimute trouxer "-", o azimute DEVE ser "-".
    - A coluna "DIMENSÕES (mm)":
-     * Para antenas com 3 dimensões (ex: RF "2500 x 355 x 192" ou MODULO "560 x 308 x 133"): preencha comprimento="2500", largura="355", profundidade="192".
+     * Para equipamentos com 3 dimensões (ex: RF "1400 x 320 x 145", RRU "440 x 400 x 120", ODU "151 x 151 x 84", GPS "150 x 150 x 100"): preencha comprimento, largura e profundidade com cada medida respectiva.
      * REGRA CRÍTICA PARA ANTENAS MW (Micro-ondas / Parábola / Diâmetro único ex: "900" ou "600"):
        - O valor da dimensão/diâmetro DEVE OBRIGATORIAMENTE ser gravado no campo "profundidade" (ex: "900").
        - Os campos "comprimento" e "largura" DEVEM OBRIGATORIAMENTE ficar como "-".
@@ -166,14 +177,25 @@ export const INSTRUCOES_COLLO = `1. CARIMBO ("SITE:"):
    - REGRA CRÍTICA DE SELEÇÃO: Na Folha 03 aparecem duas tabelas: "CARREGAMENTO ANTENAS EXISTENTES" e "CARREGAMENTO TIM - À INSTALAR".
    - Extraia EXCLUSIVAMENTE os equipamentos da tabela "CARREGAMENTO TIM - À INSTALAR" (ou "CARREGAMENTO TIM A INSTALAR" / "PROJETADO").
    - IGNORE COMPLETAMENTE a tabela "CARREGAMENTO ANTENAS EXISTENTES" (antenas legadas ou de terceiros NÃO devem entrar).
-   - Para cada linha da tabela "CARREGAMENTO TIM - À INSTALAR":
-     * A coluna "TIPO DE ANTENA" (ou "TIPO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "RRU", "MODULO", "MW", "GPS", "ODU", "TMA"). Copie com fidelidade o que estiver na célula (se estiver "RRU", extraia "RRU"; se estiver "MODULO", extraia "MODULO").
-     * A coluna "ALTURA": cota de instalação na torre (ex: "33,00" ou "33") -> mapeie para "rad_center".
-     * A coluna "QUANT.": extraia a quantidade exata indicada na célula (ex: "03" -> "3", "02" -> "2").
-     * A coluna "AZIMUTE (N.V.)": copie exatamente o valor da célula. Quando os setores vierem agrupados em uma única linha (ex: "125°/230°/315°"), copie a sequência completa (ex: "125/230/315"). Mantenha a linha agrupada.
-     * A coluna "DIMENSÕES (mm)":
-       - Para equipamentos com 3 medidas (ex: "710 x 400 x 192", "1500 x 450 x 192", "630 x 480 x 100"): preencha comprimento, largura e profundidade com cada valor respectivo.
-       - Para antenas MW com diâmetro único (ex: "600", "900"): o diâmetro DEVE OBRIGATORIAMENTE ser gravado em "profundidade", mantendo "comprimento" e "largura" como "-".
+    - Para cada linha da tabela "CARREGAMENTO TIM - À INSTALAR":
+      * A coluna "TIPO DE ANTENA" (ou "TIPO"): extraia EXATAMENTE o texto literal da célula.
+        - "RF" -> extraia "RF"
+        - "RRU" -> extraia EXATAMENTE "RRU" (NUNCA troque por "MODULO"!)
+        - "ODU" -> extraia EXATAMENTE "ODU" (NUNCA troque por "MW"!)
+        - "MW" -> extraia EXATAMENTE "MW"
+        - "MODULO" -> extraia "MODULO" (apenas se a célula trouxer literalmente "MODULO")
+        - "GPS" -> extraia "GPS"
+        - "TMA" -> extraia "TMA"
+        - ATENÇÃO CRÍTICA: NUNCA troque "RRU" por "MODULO" e NUNCA troque "ODU" por "MW"! Copie fielmente o texto do cabeçalho "TIPO DE ANTENA".
+      * A coluna "ALTURA": cota de instalação na torre (ex: "40,0000" ou "38,0000" ou "33,00") -> mapeie para "rad_center".
+      * A coluna "QUANT.": extraia a quantidade exata indicada na célula (ex: "06" -> "6", "02" -> "2", "01" -> "1"). NUNCA ignore ou resuma a quantidade.
+      * A coluna "AZIMUTE (N.V.)":
+        - Para antenas direcionais com azimute (RF, MW), copie o valor com "°" (ex: "100°" -> "100", "280°" -> "280", "275°" -> "275", "77°" -> "77", "96°" -> "96", "283°" -> "283").
+        - Quando os setores vierem agrupados na mesma linha (ex: "125°/230°/315°"), copie a sequência completa ("125/230/315").
+        - ATENÇÃO CRÍTICA (NÃO CONFUNDIR COM DIMENSÕES): Equipamentos como RRU, ODU, GPS e módulos NÃO possuem azimute e trazem hífen "-" na coluna AZIMUTE. NUNCA copie a terceira dimensão (profundidade de 120, 84 ou 100 de "440 x 400 x 120" ou "151 x 151 x 84") para o campo "azimute"! Se a célula tiver "-", use "-".
+      * A coluna "DIMENSÕES (mm)":
+        - Para equipamentos com 3 medidas (ex: "1400 x 320 x 145", "440 x 400 x 120", "151 x 151 x 84", "150 x 150 x 100", "710 x 400 x 192"): preencha comprimento, largura e profundidade com cada valor respectivo.
+        - Para antenas MW com diâmetro único (ex: "600", "900"): o diâmetro DEVE OBRIGATORIAMENTE ser gravado em "profundidade", mantendo "comprimento" e "largura" como "-".
      * Colunas ÁREA DE EXPOSIÇÃO e ARRASTO:
        - "ÁREA DE EXPOSIÇÃO (m²)" -> campo "aev_sem_ca" (ex: "0.852", "2.025", "0.605").
        - "ARRASTO" -> campo "ca" (ex: "1.2" ou "1.6").
@@ -244,15 +266,27 @@ export function carregarConfig(): ConfigAutomacao {
     const tipoProjeto: TipoProjeto = j.tipoProjeto === "collo" ? "collo" : "bts";
 
     let instrucoesBts = typeof j.instrucoesBts === "string" && j.instrucoesBts.trim() ? j.instrucoesBts : "";
-    if (!instrucoesBts || !instrucoesBts.includes("fidelidade óptica rigorosa")) {
-      instrucoesBts = typeof j.instrucoes === "string" && j.instrucoes.includes("fidelidade óptica rigorosa")
-        ? j.instrucoes
-        : INSTRUCOES_BTS;
+    if (
+      !instrucoesBts ||
+      !instrucoesBts.includes("fidelidade óptica rigorosa") ||
+      instrucoesBts.includes("RRU será tratado como MODULO") ||
+      instrucoesBts.includes('onde constar "MODULO", extraia "MODULO"') ||
+      !instrucoesBts.includes('NUNCA troque "RRU" por "MODULO"')
+    ) {
+      instrucoesBts = INSTRUCOES_BTS;
     }
 
     let instrucoesCollo = typeof j.instrucoesCollo === "string" && j.instrucoesCollo.trim()
       ? j.instrucoesCollo
       : INSTRUCOES_COLLO;
+    if (
+      !instrucoesCollo ||
+      instrucoesCollo.includes("RRU será tratado como MODULO") ||
+      instrucoesCollo.includes('onde constar "MODULO", extraia "MODULO"') ||
+      !instrucoesCollo.includes('NUNCA troque "RRU" por "MODULO"')
+    ) {
+      instrucoesCollo = INSTRUCOES_COLLO;
+    }
 
     const instrucoesAtivas = tipoProjeto === "collo" ? instrucoesCollo : instrucoesBts;
 

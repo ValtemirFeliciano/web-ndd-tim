@@ -304,9 +304,23 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
     const eComAliases = aplicarAliases(e, aliases, log, i);
 
-    let tipoEquip = s(eComAliases?.tipo_equipamento).trim();
-    if (["MICROONDAS", "MICRO-ONDAS", "MICRO ONDAS", "PARABOLA", "PARABÓLICA"].includes(tipoEquip.toUpperCase())) {
+    let tipoEquip = s(eComAliases?.tipo_equipamento).trim().toUpperCase();
+    const modeloUpper = s(eComAliases?.modelo).toUpperCase().trim();
+
+    if (["MICROONDAS", "MICRO-ONDAS", "MICRO ONDAS", "PARABOLA", "PARABÓLICA"].includes(tipoEquip)) {
       tipoEquip = "MW";
+    }
+
+    // 1. Correção ODU: se for SR2D ou contiver ODU, é ODU e NUNCA MW
+    if (modeloUpper.includes("SR2D") || modeloUpper.includes("SR2-D") || modeloUpper.includes("ODU")) {
+      tipoEquip = "ODU";
+      log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como ODU → tipo_equipamento definido como "ODU"`);
+    }
+
+    // 2. Correção RRU: em projetos TIM/PPI, ARPB e MÓDULO AREA têm TIPO DE ANTENA = RRU
+    if (modeloUpper === "ARPB" || modeloUpper.includes("ARPB") || modeloUpper.includes("MODULO AREA") || modeloUpper.includes("MÓDULO AREA") || modeloUpper.includes("RRU")) {
+      tipoEquip = "RRU";
+      log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
     }
 
     // Se o tipo_equipamento ficou vazio ou "-", verificar se veio em alguma chave com valor conhecido ou inferir por modelo
@@ -320,12 +334,12 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
         }
       }
       // 2. Se ainda estiver vazio e o modelo contiver "RRU" ou "MODULO", infere o tipo respectivo
-      if (!tipoEquip && s(eComAliases?.modelo).toUpperCase().includes("RRU")) {
+      if (!tipoEquip && modeloUpper.includes("RRU")) {
         tipoEquip = "RRU";
         log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
-      } else if (!tipoEquip && /M[OÓ]DULO/i.test(s(eComAliases?.modelo))) {
-        tipoEquip = "MODULO";
-        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como MODULO → tipo_equipamento definido como "MODULO"`);
+      } else if (!tipoEquip && /M[OÓ]DULO/i.test(modeloUpper)) {
+        tipoEquip = "RRU";
+        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
       }
     }
 
@@ -375,8 +389,8 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     // A dimensão física é o diâmetro da parábola e deve SEMPRE ficar na coluna Profundidade (Prof.),
     // e as colunas Comprimento e Largura devem ficar como "-".
     const tipoUpper = (eq.tipo_equipamento || "").toUpperCase().trim();
-    const modeloUpper = (eq.modelo || "").toUpperCase().trim();
-    const isMW = tipoUpper === "MW" ||
+    const isMW = tipoUpper !== "ODU" && tipoUpper !== "RRU" && (
+                 tipoUpper === "MW" ||
                  tipoUpper.includes("MW") ||
                  tipoUpper.includes("MICROONDAS") ||
                  tipoUpper.includes("MICRO-ONDAS") ||
@@ -386,7 +400,8 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
                  modeloUpper.includes("MW") ||
                  modeloUpper.includes("MINI-LINK") ||
                  modeloUpper.includes("MINILINK") ||
-                 modeloUpper.includes("PARABOL");
+                 modeloUpper.includes("PARABOL")
+    );
 
     if (isMW) {
       // Captura o diâmetro de qualquer campo onde tenha sido extraído (profundidade, comprimento ou largura)
@@ -417,6 +432,20 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
 
       if (diametro !== "-") {
         log("info", `Equipamento #${i + 1} (${eq.tipo_equipamento}): diâmetro "${diametro}" posicionado na coluna Profundidade (Comprimento e Largura = "-")`);
+      }
+    }
+
+    // 3.1. Proteção de Azimute para equipamentos sem azimute direcionado (RRU, ODU, GPS, MODULO):
+    // Se a IA leu a 3ª dimensão (profundidade em mm) como azimute (ex: 120, 84, 100):
+    if (["RRU", "ODU", "GPS", "MODULO"].includes(tipoUpper) && eq.azimute && eq.azimute !== "-") {
+      const azTrim = String(eq.azimute).trim();
+      const profNum = parseFloat(String(eq.profundidade || "").replace(",", "."));
+      const profMm = !isNaN(profNum) && profNum < 2 ? Math.round(profNum * 1000).toString() : String(eq.profundidade || "").trim();
+      const rawAz = String(eComAliases?.azimute || "").trim();
+      // Se azimute for igual à profundidade ou se for equipamento não-direcional sem indicação de graus ou setores
+      if (azTrim === profMm || azTrim === String(eComAliases?.profundidade).trim() || !(/[°º\/]/.test(rawAz))) {
+        log("info", `Equipamento #${i + 1} (${eq.tipo_equipamento}): azimute "${eq.azimute}" corrigido para "-" (equipamento sem azimute direcionado no PPI)`);
+        eq.azimute = "-";
       }
     }
 
