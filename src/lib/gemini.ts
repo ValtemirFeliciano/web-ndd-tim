@@ -307,20 +307,9 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     let tipoEquip = s(eComAliases?.tipo_equipamento).trim().toUpperCase();
     const modeloUpper = s(eComAliases?.modelo).toUpperCase().trim();
 
+    // Normalização apenas para variações de grafia de Micro-ondas / Parábola:
     if (["MICROONDAS", "MICRO-ONDAS", "MICRO ONDAS", "PARABOLA", "PARABÓLICA"].includes(tipoEquip)) {
       tipoEquip = "MW";
-    }
-
-    // 1. Correção ODU: se for SR2D ou contiver ODU, é ODU e NUNCA MW
-    if (modeloUpper.includes("SR2D") || modeloUpper.includes("SR2-D") || modeloUpper.includes("ODU")) {
-      tipoEquip = "ODU";
-      log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como ODU → tipo_equipamento definido como "ODU"`);
-    }
-
-    // 2. Correção RRU: em projetos TIM/PPI, ARPB e MÓDULO AREA têm TIPO DE ANTENA = RRU
-    if (modeloUpper === "ARPB" || modeloUpper.includes("ARPB") || modeloUpper.includes("MODULO AREA") || modeloUpper.includes("MÓDULO AREA") || modeloUpper.includes("RRU")) {
-      tipoEquip = "RRU";
-      log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
     }
 
     // Se o tipo_equipamento ficou vazio ou "-", verificar se veio em alguma chave com valor conhecido ou inferir por modelo
@@ -333,13 +322,18 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
           break;
         }
       }
-      // 2. Se ainda estiver vazio e o modelo contiver "RRU" ou "MODULO", infere o tipo respectivo
-      if (!tipoEquip && modeloUpper.includes("RRU")) {
-        tipoEquip = "RRU";
-        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
-      } else if (!tipoEquip && /M[OÓ]DULO/i.test(modeloUpper)) {
-        tipoEquip = "RRU";
-        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
+      // 2. Se ainda estiver vazio, infere pelo modelo apenas quando não houver tipo explícito no PPI
+      if (!tipoEquip || tipoEquip === "-") {
+        if (modeloUpper.includes("RRU")) {
+          tipoEquip = "RRU";
+          log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
+        } else if (/M[OÓ]DULO/i.test(modeloUpper)) {
+          tipoEquip = "MODULO";
+          log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como MODULO → tipo_equipamento definido como "MODULO"`);
+        } else if (modeloUpper.includes("ODU") || modeloUpper.includes("SR2D") || modeloUpper.includes("SR2-D")) {
+          tipoEquip = "ODU";
+          log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como ODU → tipo_equipamento definido como "ODU"`);
+        }
       }
     }
 
