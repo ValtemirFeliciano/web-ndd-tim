@@ -304,10 +304,8 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
     const eComAliases = aplicarAliases(e, aliases, log, i);
 
-    let tipoEquip = s(eComAliases?.tipo_equipamento);
-    if (tipoEquip.toUpperCase() === "RRU") {
-      tipoEquip = "MODULO";
-    } else if (["MICROONDAS", "MICRO-ONDAS", "MICRO ONDAS", "PARABOLA", "PARABÓLICA"].includes(tipoEquip.toUpperCase())) {
+    let tipoEquip = s(eComAliases?.tipo_equipamento).trim();
+    if (["MICROONDAS", "MICRO-ONDAS", "MICRO ONDAS", "PARABOLA", "PARABÓLICA"].includes(tipoEquip.toUpperCase())) {
       tipoEquip = "MW";
     }
 
@@ -316,16 +314,18 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
       // 1. Procura se algum valor do objeto retornado é "MODULO", "RF", "MW", "GPS", "TMA", "ODU" ou "RRU"
       for (const [k, v] of Object.entries(e ?? {})) {
         if (typeof v === "string" && ["MODULO", "RF", "MW", "GPS", "TMA", "ODU", "RRU"].includes(v.trim().toUpperCase())) {
-          const valUpper = v.trim().toUpperCase();
-          tipoEquip = valUpper === "RRU" ? "MODULO" : valUpper;
+          tipoEquip = v.trim().toUpperCase();
           log("info", `Equipamento #${i + 1}: tipo recuperado da chave "${k}" ("${v}") → tipo_equipamento`);
           break;
         }
       }
-      // 2. Se ainda estiver vazio e o modelo contiver "RRU", preenche com "MODULO"
+      // 2. Se ainda estiver vazio e o modelo contiver "RRU" ou "MODULO", infere o tipo respectivo
       if (!tipoEquip && s(eComAliases?.modelo).toUpperCase().includes("RRU")) {
+        tipoEquip = "RRU";
+        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "RRU"`);
+      } else if (!tipoEquip && /M[OÓ]DULO/i.test(s(eComAliases?.modelo))) {
         tipoEquip = "MODULO";
-        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como RRU → tipo_equipamento definido como "MODULO"`);
+        log("info", `Equipamento #${i + 1}: modelo "${eComAliases?.modelo}" identificado como MODULO → tipo_equipamento definido como "MODULO"`);
       }
     }
 

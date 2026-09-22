@@ -113,7 +113,7 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
    - Extraia separadamente: "bairro" (ex: "CRISTO VIVO" ou "Zona Rural"), "cidade" (ex: "BREU BRANCO"), "uf" (sigla com 2 letras, ex: "PA"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -3.413902 e -49.042893, sem símbolos ° ou letras N/S/E/W).
 4. TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"):
    - Leia a tabela linha por linha com fidelidade óptica rigorosa:
-   - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "MODULO", "MW", "GPS", "TMA") para o campo "tipo_equipamento". NUNCA deixe vazio se houver valor na célula (ex: para equipamentos RRU onde constar "MODULO", extraia "MODULO").
+   - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "RRU", "MODULO", "MW", "GPS", "TMA", "ODU") para o campo "tipo_equipamento". Copie com fidelidade o que estiver na célula (se estiver "RRU", extraia "RRU"; se estiver "MODULO", extraia "MODULO"). NUNCA deixe vazio se houver valor na célula.
    - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000" ou "59,0000" ou "60,0000").
    - A coluna "AZIMUTE (N.V.)": copie exatamente o valor numérico que antecede o "°". NUNCA assuma 0° para o setor Alpha quando houver outro valor na célula (ex: na linha 1 o azimute é 160°, não 0°).
    - A coluna "DIMENSÕES (mm)":
@@ -167,7 +167,7 @@ export const INSTRUCOES_COLLO = `1. CARIMBO ("SITE:"):
    - Extraia EXCLUSIVAMENTE os equipamentos da tabela "CARREGAMENTO TIM - À INSTALAR" (ou "CARREGAMENTO TIM A INSTALAR" / "PROJETADO").
    - IGNORE COMPLETAMENTE a tabela "CARREGAMENTO ANTENAS EXISTENTES" (antenas legadas ou de terceiros NÃO devem entrar).
    - Para cada linha da tabela "CARREGAMENTO TIM - À INSTALAR":
-     * A coluna "TIPO DE ANTENA" (ou "TIPO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "RRU", "MW", "GPS", "MODULO"). (Nota: RRU será tratado como MODULO).
+     * A coluna "TIPO DE ANTENA" (ou "TIPO"): extraia EXATAMENTE o texto literal da célula (ex: "RF", "RRU", "MODULO", "MW", "GPS", "ODU", "TMA"). Copie com fidelidade o que estiver na célula (se estiver "RRU", extraia "RRU"; se estiver "MODULO", extraia "MODULO").
      * A coluna "ALTURA": cota de instalação na torre (ex: "33,00" ou "33") -> mapeie para "rad_center".
      * A coluna "QUANT.": extraia a quantidade exata indicada na célula (ex: "03" -> "3", "02" -> "2").
      * A coluna "AZIMUTE (N.V.)": copie exatamente o valor da célula. Quando os setores vierem agrupados em uma única linha (ex: "125°/230°/315°"), copie a sequência completa (ex: "125/230/315"). Mantenha a linha agrupada.
