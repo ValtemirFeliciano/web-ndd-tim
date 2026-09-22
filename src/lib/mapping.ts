@@ -45,6 +45,14 @@ function mapeamentoPadrao(): CampoMapeamento[] {
     { id: novoId(), campo: "cep", celula: "O13" },
     { id: novoId(), campo: "uf", celula: "S13" },
     { id: novoId(), campo: "altura_ev", celula: "D14" },
+    { id: novoId(), campo: "", celula: "G37", transformacao: "aev_total_sem_ca" },
+    { id: novoId(), campo: "", celula: "K37", transformacao: "aev_total_com_ca" },
+    { id: novoId(), campo: "", celula: "G38", transformacao: "aev_reserva_sem_ca" },
+    { id: novoId(), campo: "", celula: "K38", transformacao: "aev_reserva_com_ca" },
+    { id: novoId(), campo: "", celula: "G39", transformacao: "aev_instalar_sem_ca" },
+    { id: novoId(), campo: "", celula: "K39", transformacao: "aev_instalar_com_ca" },
+    { id: novoId(), campo: "", celula: "G42", transformacao: "aev_final_sem_ca" },
+    { id: novoId(), campo: "", celula: "K42", transformacao: "aev_final_com_ca" },
     { id: novoId(), campo: "", celula: "K46", transformacao: "area_base" },
     { id: novoId(), campo: "", celula: "E49", transformacao: "multiplicacao_base" },
   ];
@@ -210,15 +218,28 @@ export function carregarConfig(): ConfigAutomacao {
             }))
         : mapeamentoPadrao();
 
-    // Garante que a regra E49 exista mesmo para quem já tinha config salva no navegador
-    if (!mapCarregado.some((m: any) => m.celula === "E49")) {
-      mapCarregado.push({
-        id: novoId(),
-        campo: "",
-        celula: "E49",
-        transformacao: "multiplicacao_base",
-      });
-    }
+    // Garante que as regras de AEV e E49 existam mesmo para quem já tinha config salva no navegador
+    const regrasMigracao: { celula: string; transformacao: string }[] = [
+      { celula: "E49", transformacao: "multiplicacao_base" },
+      { celula: "G37", transformacao: "aev_total_sem_ca" },
+      { celula: "K37", transformacao: "aev_total_com_ca" },
+      { celula: "G38", transformacao: "aev_reserva_sem_ca" },
+      { celula: "K38", transformacao: "aev_reserva_com_ca" },
+      { celula: "G39", transformacao: "aev_instalar_sem_ca" },
+      { celula: "K39", transformacao: "aev_instalar_com_ca" },
+      { celula: "G42", transformacao: "aev_final_sem_ca" },
+      { celula: "K42", transformacao: "aev_final_com_ca" },
+    ];
+    regrasMigracao.forEach((regra) => {
+      if (!mapCarregado.some((m: any) => m.celula === regra.celula)) {
+        mapCarregado.push({
+          id: novoId(),
+          campo: "",
+          celula: regra.celula,
+          transformacao: regra.transformacao,
+        });
+      }
+    });
 
     const tipoProjeto: TipoProjeto = j.tipoProjeto === "collo" ? "collo" : "bts";
 

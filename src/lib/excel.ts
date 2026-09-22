@@ -637,14 +637,35 @@ export async function gerarNddPreenchido(
       escritas.push(`${celula}="${String(valor).slice(0, 16)}${String(valor).length > 16 ? "…" : ""}"`);
       return;
     }
-    // Se a célula for E49 ou puramente numérica, grava como Number real para que fórmulas dependentes calculem
+    // Se a célula for E49 ou puramente numérica / transformação de AEV, grava como Number real para que fórmulas dependentes calculem
     let c = aba.getCell(celula);
     if (c.isMerged && c.master) c = c.master;
     const numReal = paraNumero(valor);
-    if ((celula === "E49" || m.transformacao === "multiplicacao_base") && numReal !== null) {
-      c.value = numReal;
-      if (!Number.isInteger(numReal)) {
+    const isTransformacaoAev = Boolean(m.transformacao && m.transformacao.startsWith("aev_"));
+
+    if ((celula === "E49" || m.transformacao === "multiplicacao_base" || isTransformacaoAev) && numReal !== null) {
+      if (isTransformacaoAev) {
+        let formulaAlvo: string | undefined;
+        if (celula === "G37") formulaAlvo = "SUM(O23:O33)";
+        else if (celula === "K37") formulaAlvo = "SUM(Q23:Q33)";
+        else if (celula === "G38") formulaAlvo = "4-G37";
+        else if (celula === "K38") formulaAlvo = "4-K37";
+        else if (celula === "G39") formulaAlvo = "G37";
+        else if (celula === "K39") formulaAlvo = "K37";
+        else if (celula === "G42") formulaAlvo = "G37";
+        else if (celula === "K42") formulaAlvo = "K37";
+
+        if (formulaAlvo) {
+          c.value = { formula: formulaAlvo, result: numReal };
+        } else {
+          c.value = numReal;
+        }
         c.numFmt = "0.00";
+      } else {
+        c.value = numReal;
+        if (!Number.isInteger(numReal)) {
+          c.numFmt = "0.00";
+        }
       }
     } else {
       c.value = valor;

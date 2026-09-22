@@ -149,10 +149,140 @@ export function calcularMultiplicacaoBase(
 }
 
 /**
+ * Converte string com vírgula ou ponto para Number real.
+ */
+export function paraNumero(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v !== "string") return null;
+  const limpo = v.trim();
+  if (!limpo || limpo === "-" || limpo === "N/A" || limpo === "NA") return null;
+  let normalizado: string;
+  if (limpo.includes(",")) {
+    normalizado = limpo.replace(/\./g, "").replace(",", ".");
+  } else {
+    normalizado = limpo;
+  }
+  const n = Number(normalizado);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Calcula a soma do AEV SEM Coeficiente de Arrasto de todos os equipamentos (G37).
+ */
+export function calcularAevTotalSemCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  const equipamentos = Array.isArray(dados?.equipamentos) ? dados.equipamentos : [];
+  let soma = 0;
+  for (const eq of equipamentos) {
+    const val = paraNumero(eq.aev_sem_ca);
+    if (val !== null) soma += val;
+  }
+  const res = soma.toFixed(3);
+  log?.("info", `AEV Total SEM CA calculado: ${res} m² (${equipamentos.length} equipamentos)`);
+  return res;
+}
+
+/**
+ * Calcula a soma do AEV COM Coeficiente de Arrasto de todos os equipamentos (K37).
+ */
+export function calcularAevTotalComCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  const equipamentos = Array.isArray(dados?.equipamentos) ? dados.equipamentos : [];
+  let soma = 0;
+  for (const eq of equipamentos) {
+    const val = paraNumero(eq.aev_com_ca);
+    if (val !== null) soma += val;
+  }
+  const res = soma.toFixed(3);
+  log?.("info", `AEV Total COM CA calculado: ${res} m² (${equipamentos.length} equipamentos)`);
+  return res;
+}
+
+/**
+ * Calcula a reserva de AEV SEM Coeficiente de Arrasto (4,00m² - AEV Total Atual) (G38).
+ */
+export function calcularAevReservaSemCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  const total = parseFloat(calcularAevTotalSemCa(dados)) || 0;
+  const reserva = Math.max(0, 4.0 - total);
+  const res = reserva.toFixed(2);
+  log?.("info", `AEV Reserva SEM CA calculada: 4,00 - ${total.toFixed(3)} = ${res} m²`);
+  return res;
+}
+
+/**
+ * Calcula a reserva de AEV COM Coeficiente de Arrasto (4,00m² - AEV Total Atual) (K38).
+ */
+export function calcularAevReservaComCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  const total = parseFloat(calcularAevTotalComCa(dados)) || 0;
+  const reserva = Math.max(0, 4.0 - total);
+  const res = reserva.toFixed(2);
+  log?.("info", `AEV Reserva COM CA calculada: 4,00 - ${total.toFixed(3)} = ${res} m²`);
+  return res;
+}
+
+/**
+ * AEV Total a Instalar SEM Coeficiente de Arrasto (G39).
+ */
+export function calcularAevInstalarSemCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  return calcularAevTotalSemCa(dados, log);
+}
+
+/**
+ * AEV Total a Instalar COM Coeficiente de Arrasto (K39).
+ */
+export function calcularAevInstalarComCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  return calcularAevTotalComCa(dados, log);
+}
+
+/**
+ * AEV Final SEM Coeficiente de Arrasto (G42).
+ */
+export function calcularAevFinalSemCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  return calcularAevTotalSemCa(dados, log);
+}
+
+/**
+ * AEV Final COM Coeficiente de Arrasto (K42).
+ */
+export function calcularAevFinalComCa(
+  dados: any,
+  log?: (level: "info" | "warn" | "error", msg: string) => void
+): string {
+  return calcularAevTotalComCa(dados, log);
+}
+
+/**
  * Mapa de transformações disponíveis.
  * Cada função recebe os dados extraídos e retorna o valor transformado.
  */
 export const TRANSFORMACOES: Record<string, (dados: any, log?: (level: "info" | "warn" | "error", msg: string) => void) => string> = {
-  area_base: (dados, log) => calcularAreaBase(dados.nx_base, dados.di_base, log),
+  area_base: (dados, log) => calcularAreaBase(dados?.nx_base, dados?.di_base, log),
   multiplicacao_base: (dados, log) => calcularMultiplicacaoBase(dados, log),
+  aev_total_sem_ca: (dados, log) => calcularAevTotalSemCa(dados, log),
+  aev_total_com_ca: (dados, log) => calcularAevTotalComCa(dados, log),
+  aev_reserva_sem_ca: (dados, log) => calcularAevReservaSemCa(dados, log),
+  aev_reserva_com_ca: (dados, log) => calcularAevReservaComCa(dados, log),
+  aev_instalar_sem_ca: (dados, log) => calcularAevInstalarSemCa(dados, log),
+  aev_instalar_com_ca: (dados, log) => calcularAevInstalarComCa(dados, log),
+  aev_final_sem_ca: (dados, log) => calcularAevFinalSemCa(dados, log),
+  aev_final_com_ca: (dados, log) => calcularAevFinalComCa(dados, log),
 };

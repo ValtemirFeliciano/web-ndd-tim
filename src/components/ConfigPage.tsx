@@ -268,8 +268,20 @@ export default function ConfigPage({ cfg, onChange, onVoltar, tipoProjeto, onTip
                         className="field-input w-full px-2 py-1 font-mono text-[10px]"
                       >
                         <option value="">(nenhuma)</option>
-                        <option value="area_base">área_base (nx × dim - ex: 3 x 5)</option>
-                        <option value="multiplicacao_base">multiplicação_base (resultado m² - ex: 15)</option>
+                        <optgroup label="Civil / Base de Concreto">
+                          <option value="area_base">área_base (nx × dim - ex: 3 x 5)</option>
+                          <option value="multiplicacao_base">multiplicação_base (resultado m² - ex: 15)</option>
+                        </optgroup>
+                        <optgroup label="Resumo de Equipamentos (AEV)">
+                          <option value="aev_total_sem_ca">aev_total_sem_ca (Soma AEV s/ CA - ex: G37)</option>
+                          <option value="aev_total_com_ca">aev_total_com_ca (Soma AEV c/ CA - ex: K37)</option>
+                          <option value="aev_reserva_sem_ca">aev_reserva_sem_ca (4 - AEV s/ CA - ex: G38)</option>
+                          <option value="aev_reserva_com_ca">aev_reserva_com_ca (4 - AEV c/ CA - ex: K38)</option>
+                          <option value="aev_instalar_sem_ca">aev_instalar_sem_ca (Total a instalar s/ CA - ex: G39)</option>
+                          <option value="aev_instalar_com_ca">aev_instalar_com_ca (Total a instalar c/ CA - ex: K39)</option>
+                          <option value="aev_final_sem_ca">aev_final_sem_ca (AEV final s/ CA - ex: G42)</option>
+                          <option value="aev_final_com_ca">aev_final_com_ca (AEV final c/ CA - ex: K42)</option>
+                        </optgroup>
                       </select>
                     </td>
                     <td className="px-2 py-1.5 text-center">
