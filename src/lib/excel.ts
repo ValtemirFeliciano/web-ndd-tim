@@ -445,17 +445,11 @@ function sanitizarPlanilhaParaExportacao(wb: Workbook, log: Logger): void {
       linha.eachCell({ includeEmpty: false }, (cel) => {
         const c = cel as any;
 
-        // 1. Célula secundária (escrava) de mesclagem não deve carregar fórmula
+        // 1. Célula secundária (escrava) de mesclagem não é dona de valor ou fórmula.
+        // No ExcelJS, c.value em uma célula escrava redireciona diretamente para c.master.value!
+        // Tentar limpar c.value aqui destruía a fórmula da célula mestre (ex: G37, K37, G38, K38, G39, G42).
+        // Células escravas já são tratadas nativamente pelo ExcelJS e devem ser ignoradas.
         if (c.isMerged && c.master && c.master.address !== c.address) {
-          if (c.value && typeof c.value === "object" && (c.value.formula || c.value.sharedFormula)) {
-            c.value = null;
-            corrigidas++;
-          }
-          if (c.model && (c.model.formula || c.model.sharedFormula)) {
-            delete c.model.formula;
-            delete c.model.sharedFormula;
-            delete c.model.result;
-          }
           return;
         }
 
