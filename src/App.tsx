@@ -476,12 +476,13 @@ export default function App() {
 
           <div className="rise-in" style={{ animationDelay: "0.08s" }}>
             <UploadZones
+              tipoProjeto={cfg.tipoProjeto ?? "bts"}
               ppi={ppi}
               template={template}
               aoEscolherPpi={aoEscolherPpi}
               aoRemoverPpi={() => { setPpi(null); log("info", "PPI removido."); }}
               aoEscolherTemplate={aoEscolherTemplate}
-              aoRemoverTemplate={() => { setTemplate(null); log("info", "Template removido — será usado o modelo embutido."); }}
+              aoRemoverTemplate={() => { setTemplate(null); log("info", `Template removido — será usado o template padrão NDD-${cfg.tipoProjeto ?? "bts"}.xlsx.`); }}
               processando={processando}
             />
           </div>

@@ -1,6 +1,6 @@
 import { useRef, useState, type DragEvent } from "react";
 import { Download, FileSpreadsheet, FileText, UploadCloud, X } from "lucide-react";
-import type { ArquivoInfo, TemplateInfo } from "../types";
+import type { ArquivoInfo, TemplateInfo, TipoProjeto } from "../types";
 import { baixarTemplatePadrao } from "../lib/excel";
 
 export function formatarBytes(n: number): string {
@@ -111,6 +111,7 @@ function ZonaDrop({ titulo, descricao, aceite, obrigatorio, arquivo, aoEscolher,
 }
 
 interface Props {
+  tipoProjeto?: TipoProjeto;
   ppi: ArquivoInfo | null;
   template: TemplateInfo | null;
   aoEscolherPpi: (f: File) => string | null;
@@ -121,6 +122,9 @@ interface Props {
 }
 
 export default function UploadZones(props: Props) {
+  const modoNome = props.tipoProjeto === "collo" ? "COLLO" : "BTS";
+  const templatePadraoNome = props.tipoProjeto === "collo" ? "NDD-collo.xlsx" : "NDD-bts.xlsx";
+
   return (
     <div className="min-w-0 grid gap-4 overflow-hidden">
       <ZonaDrop
@@ -136,7 +140,7 @@ export default function UploadZones(props: Props) {
       />
       <ZonaDrop
         titulo="02 · Template NDD"
-        descricao=".xlsx com a aba NDD · se vazio, usa o modelo embutido"
+        descricao={`.xlsx com a aba NDD · se vazio, usa ${templatePadraoNome} padrão`}
         aceite=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         obrigatorio={false}
         icone="xlsx"
@@ -148,7 +152,7 @@ export default function UploadZones(props: Props) {
       <button
         onClick={async () => {
           try {
-            await baixarTemplatePadrao();
+            await baixarTemplatePadrao(props.tipoProjeto);
           } catch (e: any) {
             alert(`Erro ao baixar template: ${e.message}`);
           }
@@ -156,7 +160,7 @@ export default function UploadZones(props: Props) {
         className="flex w-full items-center justify-center gap-2 rounded border border-cyan-500/40 bg-cyan-400/5 px-4 py-2.5 font-display text-xs font-semibold uppercase tracking-wide text-cyan-300 transition-all hover:border-cyan-400 hover:bg-cyan-400/10"
       >
         <Download size={14} />
-        Baixar template padrão para editar
+        Baixar template padrão ({modoNome})
       </button>
     </div>
   );

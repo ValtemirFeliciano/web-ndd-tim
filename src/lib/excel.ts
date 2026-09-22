@@ -2,7 +2,7 @@
 // dependendo do bundler/ambiente — cobrimos os dois formatos.
 import * as ExcelJSMod from "exceljs/dist/exceljs.min.js";
 import type { Borders, Workbook } from "exceljs";
-import type { ConfigAutomacao, DadosPPI, LogLevel } from "../types";
+import type { ConfigAutomacao, DadosPPI, LogLevel, TipoProjeto } from "../types";
 import { CELULA_RE } from "./mapping";
 import { TRANSFORMACOES } from "./transformers";
 
@@ -540,10 +540,17 @@ export async function gerarNddPreenchido(
     // (arrastadas) que o ExcelJS não consegue reescrever em certas posições.
     repararFormulasCompartilhadas(wb, log);
   } else {
-    // Tentar carregar o template padrão da pasta public/templates/
+    // Tentar carregar o template padrão correspondente (NDD-collo.xlsx ou NDD-bts.xlsx)
+    const nomeTemplate = cfg.tipoProjeto === "collo" ? "NDD-collo.xlsx" : "NDD-bts.xlsx";
     try {
-      log("info", "Tentando carregar template padrão de /templates/NDD-padrao.xlsx…");
-      const response = await fetch("/templates/NDD-padrao.xlsx");
+      log("info", `Tentando carregar template padrão de /templates/${nomeTemplate}…`);
+      let response = await fetch(`/templates/${nomeTemplate}`);
+      let templateUsado = nomeTemplate;
+      if (!response.ok) {
+        log("warn", `Template /templates/${nomeTemplate} não encontrado (HTTP ${response.status}), tentando fallback para /templates/NDD-padrao.xlsx…`);
+        response = await fetch("/templates/NDD-padrao.xlsx");
+        templateUsado = "NDD-padrao.xlsx";
+      }
       if (response.ok) {
         const buffer = await response.arrayBuffer();
         wb = new ExcelJS.Workbook();
@@ -554,7 +561,7 @@ export async function gerarNddPreenchido(
           wb.worksheets[0];
         if (!alvo) throw new Error("Template padrão não possui aba válida.");
         abaUsada = alvo.name;
-        log("ok", `Template padrão carregado de /templates/NDD-padrao.xlsx (${(buffer.byteLength / 1024).toFixed(1)} KB). Usando a aba "${alvo.name}".`);
+        log("ok", `Template padrão carregado de /templates/${templateUsado} (${(buffer.byteLength / 1024).toFixed(1)} KB) [Modo ${cfg.tipoProjeto?.toUpperCase() ?? "BTS"}]. Usando a aba "${alvo.name}".`);
         repararFormulasCompartilhadas(wb, log);
       } else {
         throw new Error(`HTTP ${response.status}`);
@@ -786,16 +793,20 @@ export function baixarBlob(blob: Blob, nome: string) {
 }
 
 /**
- * Baixa o template padrão NDD-padrao.xlsx para o usuário editar.
+ * Baixa o template padrão (NDD-collo.xlsx ou NDD-bts.xlsx) para o usuário editar.
  * Se o arquivo existir em /templates/, baixa ele. Caso contrário,
- * gera e baixa o template embutido.
+ * tenta NDD-padrao.xlsx e como último recurso gera o template embutido.
  */
-export async function baixarTemplatePadrao(): Promise<void> {
+export async function baixarTemplatePadrao(tipoProjeto?: TipoProjeto): Promise<void> {
+  const nomeTemplate = tipoProjeto === "collo" ? "NDD-collo.xlsx" : "NDD-bts.xlsx";
   try {
-    const response = await fetch("/templates/NDD-padrao.xlsx");
+    let response = await fetch(`/templates/${nomeTemplate}`);
+    if (!response.ok) {
+      response = await fetch("/templates/NDD-padrao.xlsx");
+    }
     if (response.ok) {
       const blob = await response.blob();
-      baixarBlob(blob, "NDD-padrao.xlsx");
+      baixarBlob(blob, nomeTemplate);
       return;
     }
   } catch {
@@ -808,5 +819,5 @@ export async function baixarTemplatePadrao(): Promise<void> {
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  baixarBlob(blob, "NDD-padrao.xlsx");
+  baixarBlob(blob, nomeTemplate);
 }
