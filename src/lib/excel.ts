@@ -40,8 +40,8 @@ function paraNumero(v: string | number | undefined | null): number | null {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   const s = String(v).trim();
   if (!s || s === "-") return null;
-  // Se contiver letras (ex: 'x' em '3 x 5') ou sinais de multiplicação, não é número simples
-  if (/[a-zA-Z×*]/.test(s)) return null;
+  // Se contiver letras, múltiplos valores separados por barra/ponto-e-vírgula ou sinais de multiplicação, não é número simples
+  if (/[a-zA-Z×*\/\\;|]/.test(s)) return null;
   // remove qualquer coisa que não seja dígito, vírgula, ponto ou sinal
   const limpo = s.replace(/[^\d,.\-]/g, "");
   if (!limpo) return null;
@@ -580,6 +580,9 @@ export async function gerarNddPreenchido(
     let c = aba.getCell(cel);
     if (c.isMerged && c.master) c = c.master;
     c.value = valor;
+    if (typeof valor === "string") {
+      c.numFmt = "@";
+    }
     n++;
   };
 
@@ -692,7 +695,16 @@ export async function gerarNddPreenchido(
 
       // QTDE, ângulos e dimensões: número real, sem casas decimais/inteiro
       if (!escreveNumero(aba, `G${L}`, eq.qtde, 0)) escreve(`G${L}`, eq.qtde ?? 1);
-      if (!escreveNumero(aba, `H${L}`, eq.azimute, 0)) escreve(`H${L}`, eq.azimute || "-");
+      // Azimute: número real se for setor único (ex: 160, 220, 0), ou texto com numFmt "@"
+      // preservando as barras se múltiplos setores vierem na mesma linha (ex: 125/230/315).
+      let azimuteValor = eq.azimute;
+      if (typeof azimuteValor === "string") {
+        azimuteValor = azimuteValor.replace(/[°º]/g, "").trim();
+        if (azimuteValor.includes("/")) {
+          azimuteValor = azimuteValor.replace(/\s*\/\s*/g, "/");
+        }
+      }
+      if (!escreveNumero(aba, `H${L}`, azimuteValor, 0)) escreve(`H${L}`, azimuteValor || "-");
 
       // Dimensões convertidas deterministicamente para metros:
       const compM = paraMetros(eq.comprimento);
