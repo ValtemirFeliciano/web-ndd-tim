@@ -93,9 +93,11 @@ export function decomporDimensoes(str: string): { comprimento?: string; largura?
   if (partes.length === 0) return null;
 
   const fmt = (n: number) => {
-    // Se for em milímetros (> 20), converte para metros
+    // Se for em milímetros (> 20), converte para metros dividindo por 1000
     const emMetros = n > 20 ? n / 1000 : n;
-    return Number.isInteger(emMetros) ? emMetros.toString() : (Math.round((emMetros + Number.EPSILON) * 100) / 100).toFixed(2);
+    // NÃO arredonda para 2 casas: preserva o valor exato (ex: 355mm -> 0,355m; 145mm -> 0,145m)
+    const exato = parseFloat(emMetros.toFixed(4));
+    return exato.toString().replace(".", ",");
   };
 
   if (partes.length >= 3) {
@@ -283,12 +285,20 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   const sDim = (v: any) => {
     const str = s(v);
     if (!str || str === "-") return "-";
+    if (/[xX×*\/]/.test(str)) return str;
     const num = parseFloat(str.replace(",", "."));
-    if (!isNaN(num) && num > 20) {
-      const emM = num / 1000;
-      return Number.isInteger(emM) ? emM.toString() : (Math.round((emM + Number.EPSILON) * 100) / 100).toFixed(2);
+    if (!isNaN(num)) {
+      const emM = num > 20 ? num / 1000 : num;
+      const exato = parseFloat(emM.toFixed(4));
+      return exato.toString().replace(".", ",");
     }
-    return str;
+    return str.replace(".", ",");
+  };
+
+  const sVirgula = (v: any) => {
+    const str = s(v);
+    if (!str || str === "-") return str || "-";
+    return str.replace(".", ",");
   };
 
   const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
@@ -327,10 +337,10 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
       comprimento: sDim(eComAliases?.comprimento),
       largura: sDim(eComAliases?.largura),
       profundidade: sDim(eComAliases?.profundidade),
-      rad_center: s(eComAliases?.rad_center),
-      aev_sem_ca: s(eComAliases?.aev_sem_ca),
-      ca: s(eComAliases?.ca) || "-",
-      aev_com_ca: s(eComAliases?.aev_com_ca),
+      rad_center: sVirgula(eComAliases?.rad_center),
+      aev_sem_ca: sVirgula(eComAliases?.aev_sem_ca),
+      ca: sVirgula(eComAliases?.ca) || "-",
+      aev_com_ca: sVirgula(eComAliases?.aev_com_ca),
     };
 
     // 1. Se comprimento contiver string com múltiplos valores (ex: "2500 x 355 x 192" ou "1400x320x145"):

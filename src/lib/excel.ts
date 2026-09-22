@@ -63,7 +63,7 @@ function paraMetros(v: string | number | undefined | null): number | null {
   const n = paraNumero(v);
   if (n === null) return null;
   if (n > 20) {
-    return Number((n / 1000).toFixed(3));
+    return Number((n / 1000).toFixed(4));
   }
   return n;
 }
@@ -716,13 +716,13 @@ export async function gerarNddPreenchido(
         finalLargM = null;
       }
 
-      if (finalCompM !== null) escreveNumero(aba, `I${L}`, finalCompM, 2);
+      if (finalCompM !== null) escreveNumero(aba, `I${L}`, finalCompM, 3);
       else escreve(`I${L}`, isMW ? "-" : (eq.comprimento || "-"));
 
-      if (finalLargM !== null) escreveNumero(aba, `J${L}`, finalLargM, 2);
+      if (finalLargM !== null) escreveNumero(aba, `J${L}`, finalLargM, 3);
       else escreve(`J${L}`, isMW ? "-" : (eq.largura || "-"));
 
-      if (finalProfM !== null) escreveNumero(aba, `K${L}`, finalProfM, 2);
+      if (finalProfM !== null) escreveNumero(aba, `K${L}`, finalProfM, 3);
       else escreve(`K${L}`, eq.profundidade || "-");
 
       if (!escreveNumero(aba, `L${L}`, eq.rad_center, 2)) escreve(`L${L}`, eq.rad_center);
