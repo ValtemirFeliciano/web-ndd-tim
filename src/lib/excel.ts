@@ -688,7 +688,7 @@ export async function gerarNddPreenchido(
     dados.equipamentos.forEach((eq, idx) => {
       const L = linhaInicial + idx;
       escreve(`A${L}`, "TIM");
-      escreve(`B${L}`, "NOVA");
+      escreve(`B${L}`, "INSTALAÇÃO");
       escreve(`C${L}`, eq.tipo_equipamento);
       escreve(`D${L}`, "-");
       escreve(`E${L}`, eq.modelo);
