@@ -34,6 +34,10 @@ export interface Rastreabilidade {
 export interface DadosPPI {
   site_id_cliente: string;
   site_id_detentor: string;
+  /** Data do RFI digitada pelo usuário ou extraída do PPI (célula D7) */
+  data_rfi?: string;
+  /** Data de emissão da NDD preenchida via código (célula D6) */
+  data_emissao?: string;
   endereco: string;
   bairro: string;
   cidade: string;
@@ -138,6 +142,8 @@ export const EQUIPAMENTO_VAZIO: Equipamento = {
 export const DADOS_VAZIOS: DadosPPI = {
   site_id_cliente: "",
   site_id_detentor: "",
+  data_rfi: "",
+  data_emissao: "",
   endereco: "",
   bairro: "",
   cidade: "",
@@ -158,6 +164,7 @@ export const DADOS_VAZIOS: DadosPPI = {
 export const CAMPOS_PRINCIPAIS: { chave: keyof DadosPPI; rotulo: string }[] = [
   { chave: "site_id_cliente", rotulo: "Site ID Cliente" },
   { chave: "site_id_detentor", rotulo: "Site ID Detentor" },
+  { chave: "data_rfi", rotulo: "Data do RFI" },
   { chave: "endereco", rotulo: "Endereço" },
   { chave: "bairro", rotulo: "Bairro" },
   { chave: "cidade", rotulo: "Cidade" },

@@ -1,7 +1,7 @@
 // Interop reforçado: o bundle UMD do ExcelJS pode chegar como { default: ... }
 // dependendo do bundler/ambiente — cobrimos os dois formatos.
 import * as ExcelJSMod from "exceljs/dist/exceljs.min.js";
-import type { Borders, Workbook } from "exceljs";
+import type { Borders, Workbook, Worksheet } from "exceljs";
 import type { ConfigAutomacao, DadosPPI, LogLevel, TipoProjeto } from "../types";
 import { CELULA_RE } from "./mapping";
 import { TRANSFORMACOES } from "./transformers";
@@ -83,6 +83,52 @@ function escreveNumero(aba: any, cel: string, valor: unknown, casas = 3): boolea
   return true;
 }
 
+/** Converte string ou Date em um objeto Date válido para serialização no Excel, ou null se inválido */
+function converterParaData(valor: any): Date | null {
+  if (!valor) return null;
+  if (valor instanceof Date && !isNaN(valor.getTime())) return valor;
+  if (typeof valor === "string") {
+    const s = valor.trim();
+    if (!s || s === "-") return null;
+    // Formato DD/MM/AAAA ou DD-MM-AAAA ou DD.MM.AAAA
+    const mBr = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+    if (mBr) {
+      const dia = parseInt(mBr[1], 10);
+      const mes = parseInt(mBr[2], 10) - 1;
+      let ano = parseInt(mBr[3], 10);
+      if (ano < 100) ano += 2000;
+      const d = new Date(Date.UTC(ano, mes, dia, 12, 0, 0));
+      if (!isNaN(d.getTime())) return d;
+    }
+    // Formato YYYY-MM-DD
+    const mIso = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (mIso) {
+      const ano = parseInt(mIso[1], 10);
+      const mes = parseInt(mIso[2], 10) - 1;
+      const dia = parseInt(mIso[3], 10);
+      const d = new Date(Date.UTC(ano, mes, dia, 12, 0, 0));
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+  return null;
+}
+
+/** Escreve uma data real na célula com numFmt 'dd/mm/yyyy', ou string se não for data válida */
+function escreveData(aba: any, cel: string, valor: Date | string | null | undefined): boolean {
+  if (!valor) return false;
+  let c = aba.getCell(cel);
+  if (c.isMerged && c.master) c = c.master;
+  const d = converterParaData(valor);
+  if (d) {
+    c.value = d;
+    c.numFmt = "dd/mm/yyyy";
+    return true;
+  }
+  c.value = String(valor);
+  c.numFmt = "@";
+  return true;
+}
+
 /* ------------------------------------------------------------------ */
 /*  Template padrão embutido (réplica do layout NDD)                   */
 /* ------------------------------------------------------------------ */
@@ -134,7 +180,12 @@ function criarTemplatePadrao(): Workbook {
     c.value = texto;
     c.font = { size: 9, bold: true, color: { argb: "FF44546A" } };
   };
-  rotulo("B7", "DATA RFI:");
+  rotulo("C6", "DATA DA EMISSÃO:");
+  rotulo("C7", "DATA DO RFI:");
+  aba.getCell("D6").border = BORDA_FIN as Borders;
+  aba.getCell("D6").numFmt = "dd/mm/yyyy";
+  aba.getCell("D7").border = BORDA_FIN as Borders;
+  aba.getCell("D7").numFmt = "dd/mm/yyyy";
   rotulo("C8", "SITE ID CLIENTE");
   rotulo("P8", "SITE ID DETENTOR");
   rotulo("C10", "LATITUDE");
@@ -591,6 +642,8 @@ export async function gerarNddPreenchido(
     switch (campo) {
       case "site_id_cliente": return dados.site_id_cliente;
       case "site_id_detentor": return dados.site_id_detentor;
+      case "data_rfi": return dados.data_rfi ?? "";
+      case "data_emissao": return dados.data_emissao ?? "";
       case "endereco": return dados.endereco;
       case "bairro": return dados.bairro || "Zona Rural";
       case "cidade": return dados.cidade;
@@ -613,6 +666,29 @@ export async function gerarNddPreenchido(
       ignoradas++;
       return;
     }
+
+    // Caso especial D6: Data da emissão via código na geração da NDD
+    if (celula === "D6" || m.campo === "data_emissao") {
+      const agora = new Date();
+      const dataGeracao = new Date(Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate(), 12, 0, 0));
+      if (escreveData(aba, celula, dataGeracao)) {
+        n++;
+        escritas.push(`${celula}="${agora.toLocaleDateString("pt-BR")}"`);
+        return;
+      }
+    }
+
+    // Caso especial D7: Data do RFI informada na interface
+    if (celula === "D7" || m.campo === "data_rfi") {
+      const valorRfi = (dados.data_rfi || m.valorFixo || "").trim();
+      if (valorRfi && escreveData(aba, celula, valorRfi)) {
+        n++;
+        escritas.push(`${celula}="${valorRfi}"`);
+        return;
+      }
+      return;
+    }
+
     let valor: string = "";
     if (m.valorFixo !== undefined && m.valorFixo !== "") {
       valor = m.valorFixo;
@@ -679,6 +755,19 @@ export async function gerarNddPreenchido(
   if (ignoradas > 0) {
     log("warn", `${ignoradas} regra(s) do mapa ignoradas por célula inválida — confira na página Configuração.`);
   }
+
+  // Garantia: Célula D6 SEMPRE contém a data de geração da NDD via código
+  const agora = new Date();
+  const dataGeracao = new Date(Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate(), 12, 0, 0));
+  escreveData(aba, "D6", dataGeracao);
+  log("ok", `Data de emissão (D6) preenchida via código: ${agora.toLocaleDateString("pt-BR")}`);
+
+  // Garantia: Célula D7 preenchida com a Data do RFI se informada na interface
+  if (dados.data_rfi && dados.data_rfi.trim()) {
+    escreveData(aba, "D7", dados.data_rfi.trim());
+    log("ok", `Data do RFI (D7) preenchida: "${dados.data_rfi.trim()}"`);
+  }
+
   log("ok", `Mapa de células aplicado: ${n} célula(s) escrita(s) [${escritas.slice(0, 8).join(", ")}${escritas.length > 8 ? ", …" : ""}].`);
 
   // ---------- 2. TABELA DE EQUIPAMENTOS (linha inicial configurável) ----------

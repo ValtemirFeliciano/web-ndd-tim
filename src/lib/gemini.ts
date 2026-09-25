@@ -467,6 +467,8 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   const dados: DadosPPI = {
     site_id_cliente: s(bruto.site_id_cliente),
     site_id_detentor: s(bruto.site_id_detentor),
+    data_rfi: s(bruto.data_rfi),
+    data_emissao: s(bruto.data_emissao),
     endereco: s(bruto.endereco),
     bairro: s(bruto.bairro),
     cidade: s(bruto.cidade),
@@ -488,7 +490,7 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
 
   // campos personalizados (adicionados pelo usuário na página de Configuração)
   const FIXOS = new Set([
-    "site_id_cliente", "site_id_detentor", "endereco", "bairro", "cidade", "cep", "uf",
+    "site_id_cliente", "site_id_detentor", "data_rfi", "data_emissao", "endereco", "bairro", "cidade", "cep", "uf",
     "latitude", "longitude", "altura_ev", "nx_base", "di_base", "rastreabilidade", "equipamentos",
   ]);
   const extras: Record<string, string> = {};

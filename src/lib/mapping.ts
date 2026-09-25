@@ -12,6 +12,8 @@ const LS_KEY = "nddforge.automacao.v1";
 export const DESCRICOES_CAMPOS: Record<string, string> = {
   site_id_cliente: '2ª linha do carimbo "SITE:" (ex: SN-RRRSI4)',
   site_id_detentor: '1ª linha do carimbo "SITE:" (ex: MSRBS006_A)',
+  data_emissao: "data de geração da NDD (preenchida automaticamente via código)",
+  data_rfi: "data do RFI informada pelo usuário ou extraída do PPI (formato DD/MM/AAAA)",
   endereco: "endereço completo do site",
   bairro: "bairro (ou Zona Rural)",
   cidade: "cidade",
@@ -37,6 +39,8 @@ function mapeamentoPadrao(): CampoMapeamento[] {
   return [
     { id: novoId(), campo: "site_id_cliente", celula: "C9" },
     { id: novoId(), campo: "site_id_detentor", celula: "P9" },
+    { id: novoId(), campo: "data_emissao", celula: "D6" },
+    { id: novoId(), campo: "data_rfi", celula: "D7" },
     { id: novoId(), campo: "latitude", celula: "C11" },
     { id: novoId(), campo: "longitude", celula: "J11" },
     { id: novoId(), campo: "endereco", celula: "D12" },
@@ -240,8 +244,10 @@ export function carregarConfig(): ConfigAutomacao {
             }))
         : mapeamentoPadrao();
 
-    // Garante que as regras de AEV e E49 existam mesmo para quem já tinha config salva no navegador
-    const regrasMigracao: { celula: string; transformacao: string }[] = [
+    // Garante que as regras de D6, D7, AEV e E49 existam mesmo para quem já tinha config salva no navegador
+    const regrasMigracao: { celula: string; campo?: string; transformacao?: string }[] = [
+      { celula: "D6", campo: "data_emissao" },
+      { celula: "D7", campo: "data_rfi" },
       { celula: "E49", transformacao: "multiplicacao_base" },
       { celula: "G37", transformacao: "aev_total_sem_ca" },
       { celula: "K37", transformacao: "aev_total_com_ca" },
@@ -256,7 +262,7 @@ export function carregarConfig(): ConfigAutomacao {
       if (!mapCarregado.some((m: any) => m.celula === regra.celula)) {
         mapCarregado.push({
           id: novoId(),
-          campo: "",
+          campo: regra.campo ?? "",
           celula: regra.celula,
           transformacao: regra.transformacao,
         });

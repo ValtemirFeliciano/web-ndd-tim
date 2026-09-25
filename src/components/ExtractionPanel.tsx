@@ -13,13 +13,14 @@ interface Props {
 }
 
 function Campo({
-  rotulo, valor, onChange, mono = true, celula,
+  rotulo, valor, onChange, mono = true, celula, placeholder,
 }: {
   rotulo: string;
   valor: string;
   onChange: (v: string) => void;
   mono?: boolean;
   celula?: string;
+  placeholder?: string;
 }) {
   return (
     <label className="block">
@@ -31,7 +32,7 @@ function Campo({
         value={valor}
         onChange={(e) => onChange(e.target.value)}
         className={`field-input ${mono ? "font-mono text-xs" : ""} ${valor ? "" : "input-empty"}`}
-        placeholder={valor ? "" : "não encontrado"}
+        placeholder={placeholder ?? (valor ? "" : "não encontrado")}
       />
     </label>
   );
@@ -116,10 +117,20 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
       )}
 
       <Grupo titulo="Identificação do site" icone={<Crosshair size={13} />}>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <Campo rotulo="Site ID Cliente" celula="C9" valor={dados.site_id_cliente} onChange={(v) => onCampo("site_id_cliente", v)} />
           <Campo rotulo="Site ID Detentor" celula="P9" valor={dados.site_id_detentor} onChange={(v) => onCampo("site_id_detentor", v)} />
+          <Campo
+            rotulo="Data do RFI"
+            celula="D7"
+            valor={dados.data_rfi ?? ""}
+            onChange={(v) => onCampo("data_rfi", v)}
+            placeholder="DD/MM/AAAA (ex: 25/09/2026)"
+          />
         </div>
+        <p className="mt-2 text-right font-mono text-[9px] text-mist-500">
+          Data da Emissão <span className="text-cyan-500/80">→ D6</span>: preenchida automaticamente com a data de geração da NDD
+        </p>
       </Grupo>
 
       <Grupo titulo="Localização" icone={<MapPin size={13} />}>
