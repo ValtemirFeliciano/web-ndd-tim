@@ -12,8 +12,35 @@ interface Props {
   onExtra?: (chave: string, valor: string) => void;
 }
 
+export function formatarMascaraData(valor: string, prevValor = ""): string {
+  const isDeleting = prevValor.length > valor.length;
+  let digitos = valor.replace(/\D/g, "").slice(0, 8);
+  if (!digitos) return "";
+
+  if (isDeleting) {
+    if (prevValor.endsWith("/") && !valor.endsWith("/")) {
+      digitos = digitos.slice(0, -1);
+    }
+    if (digitos.length <= 2) return digitos;
+    if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+    return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+  }
+
+  if (digitos.length === 1) return digitos;
+  if (digitos.length === 2) return `${digitos}/`;
+  if (digitos.length === 3) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+  if (digitos.length === 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}/`;
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+}
+
 function Campo({
-  rotulo, valor, onChange, mono = true, celula, placeholder,
+  rotulo,
+  valor,
+  onChange,
+  mono = true,
+  celula,
+  placeholder,
+  mascara,
 }: {
   rotulo: string;
   valor: string;
@@ -21,7 +48,18 @@ function Campo({
   mono?: boolean;
   celula?: string;
   placeholder?: string;
+  mascara?: "data";
 }) {
+  const valorExibido = mascara === "data" && /^\d{8}$/.test(valor) ? formatarMascaraData(valor) : valor;
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let novoValor = e.target.value;
+    if (mascara === "data") {
+      novoValor = formatarMascaraData(novoValor, valorExibido);
+    }
+    onChange(novoValor);
+  };
+
   return (
     <label className="block">
       <span className="mb-1 flex items-baseline justify-between">
@@ -29,10 +67,12 @@ function Campo({
         {celula && <span className="font-mono text-[9px] text-cyan-500/80">→ {celula}</span>}
       </span>
       <input
-        value={valor}
-        onChange={(e) => onChange(e.target.value)}
-        className={`field-input ${mono ? "font-mono text-xs" : ""} ${valor ? "" : "input-empty"}`}
-        placeholder={placeholder ?? (valor ? "" : "não encontrado")}
+        value={valorExibido}
+        onChange={handleChange}
+        maxLength={mascara === "data" ? 10 : undefined}
+        inputMode={mascara === "data" ? "numeric" : undefined}
+        className={`field-input ${mono ? "font-mono text-xs" : ""} ${valorExibido ? "" : "input-empty"}`}
+        placeholder={placeholder ?? (valorExibido ? "" : "não encontrado")}
       />
     </label>
   );
@@ -125,7 +165,8 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
             celula="D7"
             valor={dados.data_rfi ?? ""}
             onChange={(v) => onCampo("data_rfi", v)}
-            placeholder="DD/MM/AAAA (ex: 25/09/2026)"
+            placeholder="DD/MM/AAAA (ex: 28/09/2026)"
+            mascara="data"
           />
         </div>
         <p className="mt-2 text-right font-mono text-[9px] text-mist-500">

@@ -100,6 +100,15 @@ function converterParaData(valor: any): Date | null {
       const d = new Date(Date.UTC(ano, mes, dia, 12, 0, 0));
       if (!isNaN(d.getTime())) return d;
     }
+    // Formato DDMMAAAA (8 dígitos contínuos, ex: 28092026)
+    const mDig = s.match(/^(\d{2})(\d{2})(\d{4})$/);
+    if (mDig) {
+      const dia = parseInt(mDig[1], 10);
+      const mes = parseInt(mDig[2], 10) - 1;
+      const ano = parseInt(mDig[3], 10);
+      const d = new Date(Date.UTC(ano, mes, dia, 12, 0, 0));
+      if (!isNaN(d.getTime())) return d;
+    }
     // Formato YYYY-MM-DD
     const mIso = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if (mIso) {
