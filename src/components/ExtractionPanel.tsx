@@ -183,10 +183,11 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
             <Campo rotulo="CEP" celula="O13" valor={dados.cep} onChange={(v) => onCampo("cep", v)} />
             <Campo rotulo="UF" celula="S13" valor={dados.uf} onChange={(v) => onCampo("uf", v)} />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Campo rotulo="Latitude" celula="C11" valor={dados.latitude} onChange={(v) => onCampo("latitude", v)} />
             <Campo rotulo="Longitude" celula="J11" valor={dados.longitude} onChange={(v) => onCampo("longitude", v)} />
             <Campo rotulo="Altura da EV (m)" celula="D14" valor={dados.altura_ev} onChange={(v) => onCampo("altura_ev", v)} />
+            <Campo rotulo="Dimensões da Base" celula="K46" valor={dados.di_base ?? ""} onChange={(v) => onCampo("di_base", v)} placeholder="ex: 1,00x1,00" />
           </div>
         </div>
       </Grupo>

@@ -143,12 +143,12 @@ export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
      * "ÁREA DE EXPOSIÇÃO COM ARRASTO (m²)" -> campo "aev_com_ca" (ex: "1.065", "0.207", "1.018").
 5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
    - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO" "PARA IMPLANTAÇÃO" ou "A INSTALAR".
-   - Extraia a QUANTIDADE de bases (ex: "2") → campo "nx_base"
-   - Extraia as DIMENSÕES de cada base EXATAMENTE como aparecem no PDF → campo "di_base"
+   - Extraia as DIMENSÕES da base EXATAMENTE como aparecem no PDF → campo "di_base" (ex: se constar "2X BASE DE CONCRETO (1,00X1,00m)", extraia apenas "1,00x1,00" no campo "di_base"). Pegue apenas o que estiver lá no PDF, ignorando o "2x" ou quantidade.
+   - Extraia a QUANTIDADE de bases se indicada (ex: "2" ou "1") → campo "nx_base". NUNCA multiplique as dimensões pela quantidade de bases.
    - IMPORTANTE:
-     * Extraia APENAS a quantidade e as dimensões individuais
+     * Extraia as dimensões individuais literais exatamente como aparecem no PDF
      * Mantenha a ordem das dimensões EXATAMENTE como aparece no PDF (não inverta)
-     * O cálculo da área total será feito automaticamente
+     * NUNCA faça cálculos de multiplicação por quantidade (ex: 2x 1,00x1,00 NÃO é 2x2, extraia apenas 1,00x1,00)
      REGRA DE EXCLUSÃO CRÍTICA: 
       - IGNORE completamente qualquer medida atrelada a "PROJEÇÃO DE BASE", "FUTURA EXPANSÃO" ou "EXPANSÃO"
       - IGNORE cotas de hastes ou barras de aterramento (comum apresentarem 2,00m / 2.00m).
@@ -205,9 +205,9 @@ export const INSTRUCOES_COLLO = `1. CARIMBO ("SITE:"):
        - "ARRASTO" -> campo "ca" (ex: "1.2" ou "1.6").
        - "ÁREA DE EXPOSIÇÃO COM ARRASTO (m²)" -> campo "aev_com_ca" (ex: "1.022", "2.430", "0.726").
 5. ÁREA DE INSTALAÇÃO DO GABINETE / SOLO:
-   - Procure na LEGENDA da Planta Civil (Página 2 / Folha 02) o item de base de concreto para equipamentos TIM (ex: "1. BASE EM CONCRETO 1,0x1,0m PARA IMPLANTAÇÃO DO EQUIPAMENTO OPSS 1P - A INSTALAR").
-   - Extraia a QUANTIDADE de bases (ex: "1") -> campo "nx_base"
-   - Extraia as DIMENSÕES da base (ex: "1,00x1,00" ou "1,0x1,0") -> campo "di_base"
+   - Procure na LEGENDA da Planta Civil (Página 2 / Folha 02) o item de base de concreto para equipamentos TIM (ex: "1. BASE EM CONCRETO 1,0x1,0m PARA IMPLANTAÇÃO DO EQUIPAMENTO OPSS 1P - A INSTALAR" ou "2X BASE DE CONCRETO (1,00X1,00m)").
+   - Extraia as DIMENSÕES da base EXATAMENTE como aparecem no PDF (ex: "1,00x1,00" ou "1,0x1,0") -> campo "di_base". Pegue apenas o que estiver no documento, ignorando o "2x" ou quantidade (NUNCA multiplique as dimensões).
+   - Extraia a QUANTIDADE de bases se indicada (ex: "1" ou "2") -> campo "nx_base".
 6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
 7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
 
@@ -277,7 +277,9 @@ export function carregarConfig(): ConfigAutomacao {
       !instrucoesBts.includes("fidelidade óptica rigorosa") ||
       instrucoesBts.includes("RRU será tratado como MODULO") ||
       instrucoesBts.includes('onde constar "MODULO", extraia "MODULO"') ||
-      !instrucoesBts.includes('NUNCA troque "RRU" por "MODULO"')
+      !instrucoesBts.includes('NUNCA troque "RRU" por "MODULO"') ||
+      instrucoesBts.includes("O cálculo da área total será feito automaticamente") ||
+      !instrucoesBts.includes("Pegue apenas o que estiver lá no PDF")
     ) {
       instrucoesBts = INSTRUCOES_BTS;
     }
@@ -289,7 +291,8 @@ export function carregarConfig(): ConfigAutomacao {
       !instrucoesCollo ||
       instrucoesCollo.includes("RRU será tratado como MODULO") ||
       instrucoesCollo.includes('onde constar "MODULO", extraia "MODULO"') ||
-      !instrucoesCollo.includes('NUNCA troque "RRU" por "MODULO"')
+      !instrucoesCollo.includes('NUNCA troque "RRU" por "MODULO"') ||
+      !instrucoesCollo.includes("Pegue apenas o que estiver no documento")
     ) {
       instrucoesCollo = INSTRUCOES_COLLO;
     }

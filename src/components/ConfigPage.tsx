@@ -269,8 +269,8 @@ export default function ConfigPage({ cfg, onChange, onVoltar, tipoProjeto, onTip
                       >
                         <option value="">(nenhuma)</option>
                         <optgroup label="Civil / Base de Concreto">
-                          <option value="area_base">área_base (nx × dim - ex: 3 x 5)</option>
-                          <option value="multiplicacao_base">multiplicação_base (resultado m² - ex: 15)</option>
+                          <option value="area_base">área_base (dimensão direta do PDF - ex: 1,00 x 1,00)</option>
+                          <option value="multiplicacao_base">multiplicação_base (resultado m² da base)</option>
                         </optgroup>
                         <optgroup label="Resumo de Equipamentos (AEV)">
                           <option value="aev_total_sem_ca">aev_total_sem_ca (Soma AEV s/ CA - ex: G37)</option>
