@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, ExternalLink, FileCog, KeyRound, Radar, Radio, RefreshCw, ScanLine, Share2, Zap } from "lucide-react";
-import { MODELOS_PADRAO } from "../lib/gemini";
+import { ChevronDown, ExternalLink, FileCog, KeyRound, Layers, Radar, Radio, RefreshCw, ScanLine, Share2, Zap } from "lucide-react";
+import { MODELOS_PADRAO, normalizarNomeModelo } from "../lib/gemini";
 import type { TipoProjeto } from "../types";
 
 export interface TesteState {
@@ -18,8 +18,8 @@ interface Props {
   onTestar: () => void;
   teste: TesteState;
   listando: boolean;
-  pagina: "extracao" | "config";
-  onPagina: (p: "extracao" | "config") => void;
+  pagina: "extracao" | "config" | "massa";
+  onPagina: (p: "extracao" | "config" | "massa") => void;
   tipoProjeto: TipoProjeto;
   onTipoProjetoChange: (t: TipoProjeto) => void;
 }
@@ -62,7 +62,7 @@ export default function Header({
   }, []);
 
   const chaveOk = apiKey.trim().length > 10;
-  const todosModelos = Array.from(new Set([...modelos, ...MODELOS_PADRAO, modelo].filter(Boolean)));
+  const todosModelos = Array.from(new Set([...modelos, ...MODELOS_PADRAO, modelo].map(normalizarNomeModelo).filter(Boolean)));
 
   return (
     <header className="sticky top-0 z-40 border-b border-ink-600/70 bg-ink-900/85 backdrop-blur-md">
@@ -118,6 +118,17 @@ export default function Header({
           >
             <ScanLine size={13} />
             Extração
+          </button>
+          <button
+            onClick={() => onPagina("massa")}
+            className={`flex items-center gap-1.5 rounded px-3 py-1.5 font-display text-xs font-semibold transition-all ${
+              pagina === "massa"
+                ? "bg-ink-700 text-amber-400 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.5)] border border-amber-500/30"
+                : "text-mist-400 hover:text-mist-200"
+            }`}
+          >
+            <Layers size={13} />
+            Lote em Massa
           </button>
           <button
             onClick={() => onPagina("config")}

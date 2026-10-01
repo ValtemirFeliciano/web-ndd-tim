@@ -5,6 +5,7 @@ import UploadZones, { formatarBytes } from "./components/UploadZones";
 import ExtractionPanel from "./components/ExtractionPanel";
 import DebugConsole from "./components/DebugConsole";
 import ConfigPage from "./components/ConfigPage";
+import MassProcessingPage from "./components/MassProcessingPage";
 import { extrairDoPdf, listarModelos, testarConexao, validarDados, MODELOS_PADRAO } from "./lib/gemini";
 import { gerarNddPreenchido, baixarBlob } from "./lib/excel";
 import { carregarConfig, salvarConfig, montarPromptFinal, INSTRUCOES_BTS, INSTRUCOES_COLLO } from "./lib/mapping";
@@ -99,7 +100,7 @@ export default function App() {
   }, [autoScroll]);
 
   /* navegação + automação configurável (mapa de células & prompt) */
-  const [pagina, setPagina] = useState<"extracao" | "config">("extracao");
+  const [pagina, setPagina] = useState<"extracao" | "config" | "massa">("extracao");
   const [cfg, setCfg] = useState<ConfigAutomacao>(() => carregarConfig());
   const primeiroRenderCfg = useRef(true);
   const promptFinal = useMemo(() => montarPromptFinal(cfg, cfg.tipoProjeto), [cfg]);
@@ -445,6 +446,16 @@ export default function App() {
           onVoltar={() => setPagina("extracao")}
           tipoProjeto={cfg.tipoProjeto ?? "bts"}
           onTipoProjetoChange={aoMudarTipoProjeto}
+        />
+      ) : pagina === "massa" ? (
+        <MassProcessingPage
+          apiKey={apiKey}
+          modelo={modelo}
+          cfg={cfg}
+          tipoProjeto={cfg.tipoProjeto ?? "bts"}
+          promptFinal={promptFinal}
+          templateBuffer={template?.buffer ?? null}
+          log={log}
         />
       ) : (
       <main className="mx-auto grid min-w-0 max-w-[1840px] w-full gap-6 px-4 py-7 sm:px-6 lg:px-8 xl:px-10 lg:grid-cols-[390px_1fr] xl:grid-cols-[420px_1fr]">

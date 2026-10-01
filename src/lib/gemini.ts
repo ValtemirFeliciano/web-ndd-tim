@@ -5,6 +5,8 @@ export const MODELO_FALLBACK_503 = "gemini-3.1-flash-lite";
 export const MODELOS_PADRAO = [
   "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
 ];
@@ -26,6 +28,19 @@ export interface ResultadoGemini {
 /*  Helpers de diagnóstico                                             */
 /* ------------------------------------------------------------------ */
 
+/** Normaliza o identificador do modelo: remove prefixo 'models/' e garante o prefixo 'gemini-' se omitido */
+export function normalizarNomeModelo(nome: string): string {
+  let m = (nome || "").trim();
+  if (m.startsWith("models/")) {
+    m = m.replace(/^models\//, "");
+  }
+  // Se passou sem 'gemini-', como '2.5-flash-lite' ou '2.5-flash'
+  if (/^\d+\.\d+/.test(m)) {
+    m = `gemini-${m}`;
+  }
+  return m;
+}
+
 function descreverErroHttp(status: number, corpo: string): string {
   let dicaApi = "";
   try {
@@ -36,12 +51,28 @@ function descreverErroHttp(status: number, corpo: string): string {
   }
   switch (status) {
     case 400:
-      return `Requisição inválida (400)${dicaApi}. Geralmente: chave mal colada, modelo inexistente ou PDF corrompido.`;
+      return `Requisição inválida (400)${dicaApi}. Geralmente: formato de chave inválido, modelo inexistente ou PDF corrompido.`;
     case 401:
-    case 403:
-      return `Chave de API rejeitada (${status})${dicaApi}. Confira em aistudio.google.com → Get API key.`;
-    case 404:
+    case 403: {
+      const msgBaixa = dicaApi.toLowerCase();
+      if (msgBaixa.includes("unregistered callers")) {
+        return `Chave de API não informada ou vazia (403)${dicaApi}. Insira sua chave em "Configurar API".`;
+      }
+      if (msgBaixa.includes("leaked")) {
+        return `Chave de API bloqueada pelo Google por vazamento público (403)${dicaApi}. Gere uma nova chave em aistudio.google.com.`;
+      }
+      if (msgBaixa.includes("blocked") || msgBaixa.includes("permission_denied") || msgBaixa.includes("not been used")) {
+        return `Acesso negado à API (403)${dicaApi}. Verifique se a 'Generative Language API' está ativada no seu Google Cloud Project ou se há restrições de IP/Referrer na chave.`;
+      }
+      return `Chave de API rejeitada ou sem permissão (${status})${dicaApi}. Confira em aistudio.google.com → Get API key.`;
+    }
+    case 404: {
+      const msgBaixa = dicaApi.toLowerCase();
+      if (msgBaixa.includes("no longer available to new users")) {
+        return `Modelo descontinuado para novas contas (404)${dicaApi}. Conforme recomendação do Google, selecione "gemini-3.5-flash-lite" ou "gemini-3.1-flash-lite".`;
+      }
       return `Modelo não encontrado (404)${dicaApi}. O nome do modelo mudou? Use "Listar modelos" para ver os ativos.`;
+    }
     case 429:
       return `Cota/limite de requisições atingido (429)${dicaApi}. Aguarde ~1 minuto e tente de novo.`;
     case 500:
@@ -559,6 +590,11 @@ export async function extrairDoPdf(
   aliases: AliasColuna[],
   log: Logger
 ): Promise<ResultadoGemini> {
+  const chaveLimpa = (apiKey || "").trim();
+  if (!chaveLimpa) {
+    throw new Error("Chave de API do Gemini não configurada. Clique em 'Configurar API' e insira sua chave do Google AI Studio.");
+  }
+
   const inicio = performance.now();
 
   if (arquivo.tamanho > LIMITE_INLINE_MB * 1024 * 1024) {
@@ -581,19 +617,20 @@ export async function extrairDoPdf(
   );
   log("info", `Payload montado: prompt (${prompt.length} chars) + PDF em base64 (${(arquivo.base64.length / 1024).toFixed(0)}KB, mime ${arquivo.mime}).`);
 
-  let modeloAtual = modelo;
+  let modeloAtual = normalizarNomeModelo(modelo);
   let corpo = "";
   let tentativasTotal = 0;
 
   const tentarComModelo = async (mod: string, isFallback: boolean): Promise<boolean> => {
-    const url = `${BASE}/models/${mod}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const modNorm = normalizarNomeModelo(mod);
+    const url = `${BASE}/models/${encodeURIComponent(modNorm)}:generateContent?key=${encodeURIComponent(chaveLimpa)}`;
     for (let tentativa = 1; tentativa <= MAX_TENTATIVAS_503; tentativa++) {
       tentativasTotal++;
       log(
         "info",
         tentativa === 1
-          ? `POST → ${mod}${isFallback ? " (fallback ativo)" : ""} …`
-          : `Tentativa ${tentativa}/${MAX_TENTATIVAS_503} em ${mod} após 503 …`
+          ? `POST → ${modNorm}${isFallback ? " (fallback ativo)" : ""} …`
+          : `Tentativa ${tentativa}/${MAX_TENTATIVAS_503} em ${modNorm} após 503 …`
       );
       const r = await postGemini(url, payload, log);
       if (r.status === 503) {
@@ -684,21 +721,30 @@ export async function extrairDoPdf(
 
 /** Lista os modelos generateContent disponíveis para a chave. */
 export async function listarModelos(apiKey: string): Promise<string[]> {
-  const resp = await fetch(`${BASE}/models?key=${encodeURIComponent(apiKey)}`);
+  const chaveLimpa = (apiKey || "").trim();
+  if (!chaveLimpa) {
+    throw new Error("Chave de API não informada. Cole sua chave do Google AI Studio em 'Configurar API'.");
+  }
+  const resp = await fetch(`${BASE}/models?key=${encodeURIComponent(chaveLimpa)}`);
   const corpo = await resp.text();
   if (resp.status !== 200) throw new Error(descreverErroHttp(resp.status, corpo));
   const j = JSON.parse(corpo);
   const nomes: string[] = (j?.models ?? [])
     .filter((m: any) => Array.isArray(m?.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
-    .map((m: any) => String(m.name).replace(/^models\//, ""))
+    .map((m: any) => normalizarNomeModelo(String(m.name)))
     .filter((n: string) => /gemini/.test(n));
   if (nomes.length === 0) throw new Error("Nenhum modelo Gemini encontrado para esta chave.");
-  return nomes.sort().reverse();
+  return Array.from(new Set(nomes)).sort().reverse();
 }
 
 /** Teste rápido: gera 8 tokens com o modelo escolhido. */
 export async function testarConexao(apiKey: string, modelo: string): Promise<string> {
-  const url = `${BASE}/models/${modelo}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const chaveLimpa = (apiKey || "").trim();
+  if (!chaveLimpa) {
+    throw new Error("Chave de API não informada. Cole sua chave do Google AI Studio em 'Configurar API'.");
+  }
+  const modNorm = normalizarNomeModelo(modelo);
+  const url = `${BASE}/models/${encodeURIComponent(modNorm)}:generateContent?key=${encodeURIComponent(chaveLimpa)}`;
   const r = await postGemini(url, {
     contents: [{ parts: [{ text: 'Responda exatamente: OK' }] }],
     generationConfig: { maxOutputTokens: 8, temperature: 0 },
