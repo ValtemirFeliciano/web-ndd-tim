@@ -174,6 +174,67 @@ export async function verificarEObterPermissao(handle: any, mode: "read" | "read
   }
 }
 
+/**
+ * Sanitiza rigorosamente strings para nomes de pastas e arquivos no sistema de arquivos
+ * (compatível com Windows NTFS/FAT32, Linux e macOS).
+ * Remove caracteres proibidos, espaços/pontos no final, caracteres de controle e quebras de linha.
+ */
+export function sanitizarNomeParaFs(str: string, maxLen = 120): string {
+  if (!str) return "SEM_NOME";
+
+  let limpo = str
+    // Substitui quebras de linha, tabulações e retornos por espaço
+    .replace(/[\r\n\t]+/g, " ")
+    // Remove caracteres de controle ASCII não imprimíveis (0x00 a 0x1F e 0x7F)
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    // Substitui caracteres proibidos no Windows / Unix (< > : " / \ | ? *) por _
+    .replace(/[<>:"/\\|?*]/g, "_")
+    // Colapsa múltiplos espaços ou underscores repetidos
+    .replace(/\s+/g, " ")
+    .replace(/_+/g, "_")
+    .trim()
+    // Remove pontos e espaços finais (crítico no Windows Win32 API para evitar NotFoundError)
+    .replace(/[. ]+$/, "")
+    // Remove pontos e espaços no início
+    .replace(/^[. ]+/, "");
+
+  // Se ficou vazio após a limpeza
+  if (!limpo) {
+    limpo = "SEM_NOME";
+  }
+
+  // Previne nomes de dispositivos reservados no Windows (CON, PRN, AUX, NUL, COM1-9, LPT1-9)
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(limpo)) {
+    limpo = `${limpo}_item`;
+  }
+
+  // Limita o tamanho de cada componente de nome para evitar ultrapassar limites de caminho do sistema
+  if (limpo.length > maxLen) {
+    limpo = limpo.slice(0, maxLen).trim().replace(/[. ]+$/, "");
+  }
+
+  return limpo;
+}
+
+/**
+ * Testa se um DirectoryHandle ainda é acessível no disco e possui permissão de leitura e gravação.
+ * Se o diretório foi movido, renomeado ou excluído no Windows/disco, lança ou retorna false.
+ */
+export async function testarHandleAcessivel(handle: any): Promise<boolean> {
+  if (!handle) return false;
+  try {
+    const perm = await verificarEObterPermissao(handle, "readwrite");
+    if (!perm) return false;
+    // Tenta iterar uma entrada para verificar se o diretório existe fisicamente no sistema de arquivos
+    const iter = handle.values();
+    await iter.next();
+    return true;
+  } catch (err: any) {
+    console.warn("[NDDForge] DirectoryHandle não está acessível no sistema:", err);
+    return false;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Gravação e Empacotamento com Criação Automática de Subpastas      */
 /* ------------------------------------------------------------------ */
@@ -186,14 +247,17 @@ export async function salvarNddIndividualEmSubpasta(
   nomeArquivo: string,
   blob: Blob
 ): Promise<{ pastaCriada: string; arquivoCriado: string }> {
-  // Nome da subpasta é exatamente o nome do arquivo sem .xlsx
-  const nomePasta = nomeArquivo.replace(/\.xlsx$/i, "");
+  // Nome da subpasta é exatamente o nome do arquivo sem .xlsx com sanitização estrita para o SO
+  const nomeSemExt = nomeArquivo.replace(/\.xlsx$/i, "");
+  const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
+  const arquivoFinal = `${nomePasta}.xlsx`;
+
   const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
-  const fileHandle = await subDirHandle.getFileHandle(nomeArquivo, { create: true });
+  const fileHandle = await subDirHandle.getFileHandle(arquivoFinal, { create: true });
   const writable = await fileHandle.createWritable();
   await writable.write(blob);
   await writable.close();
-  return { pastaCriada: nomePasta, arquivoCriado: nomeArquivo };
+  return { pastaCriada: nomePasta, arquivoCriado: arquivoFinal };
 }
 
 /**
@@ -201,8 +265,10 @@ export async function salvarNddIndividualEmSubpasta(
  */
 export async function gerarZipNddIndividual(nomeArquivo: string, blob: Blob): Promise<Blob> {
   const zip = new JSZip();
-  const nomePasta = nomeArquivo.replace(/\.xlsx$/i, "");
-  zip.folder(nomePasta)?.file(nomeArquivo, blob);
+  const nomeSemExt = nomeArquivo.replace(/\.xlsx$/i, "");
+  const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
+  const arquivoFinal = `${nomePasta}.xlsx`;
+  zip.folder(nomePasta)?.file(arquivoFinal, blob);
   return await zip.generateAsync({
     type: "blob",
     compression: "DEFLATE",
@@ -223,13 +289,15 @@ export async function salvarArquivosEmPasta(
   let salvos = 0;
   for (let i = 0; i < arquivos.length; i++) {
     const arq = arquivos[i];
-    const nomePasta = arq.nome.replace(/\.xlsx$/i, "");
-    onProgresso?.(i + 1, arquivos.length, `${nomePasta}/${arq.nome}`);
+    const nomeSemExt = arq.nome.replace(/\.xlsx$/i, "");
+    const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
+    const arquivoFinal = `${nomePasta}.xlsx`;
+    onProgresso?.(i + 1, arquivos.length, `${nomePasta}/${arquivoFinal}`);
     
     // Cria ou abre a subpasta com o nome da NDD
     const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
     // Cria a planilha dentro da subpasta
-    const fileHandle = await subDirHandle.getFileHandle(arq.nome, { create: true });
+    const fileHandle = await subDirHandle.getFileHandle(arquivoFinal, { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(arq.blob);
     await writable.close();
@@ -245,8 +313,10 @@ export async function salvarArquivosEmPasta(
 export async function gerarPacoteZip(arquivos: ArquivoSalvar[]): Promise<Blob> {
   const zip = new JSZip();
   arquivos.forEach((arq) => {
-    const nomePasta = arq.nome.replace(/\.xlsx$/i, "");
-    zip.folder(nomePasta)?.file(arq.nome, arq.blob);
+    const nomeSemExt = arq.nome.replace(/\.xlsx$/i, "");
+    const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
+    const arquivoFinal = `${nomePasta}.xlsx`;
+    zip.folder(nomePasta)?.file(arquivoFinal, arq.blob);
   });
   return await zip.generateAsync({
     type: "blob",

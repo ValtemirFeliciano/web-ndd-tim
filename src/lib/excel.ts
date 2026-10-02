@@ -5,6 +5,7 @@ import type { Borders, Workbook, Worksheet } from "exceljs";
 import type { ConfigAutomacao, DadosPPI, LogLevel, TipoProjeto } from "../types";
 import { CELULA_RE } from "./mapping";
 import { TRANSFORMACOES } from "./transformers";
+import { sanitizarNomeParaFs } from "./fileSystem";
 
 const ExcelJS: any = (ExcelJSMod as any)?.default ?? (ExcelJSMod as any);
 
@@ -889,14 +890,12 @@ export async function gerarNddPreenchido(
   });
 
   // Gerar nome do arquivo seguindo o padrão: [NDD] WINITY_{ID_OPERADORA}_{ID_WINITY}_{CIDADE}_{ID_OPERADORA}
-  const idOperadora = dados.site_id_cliente || "SEM_ID_OPERADORA";
-  const idWinity = dados.site_id_detentor || "SEM_ID_WINITY";
-  const cidade = dados.cidade || "SEM_CIDADE";
+  const idOperadora = sanitizarNomeParaFs(dados.site_id_cliente || "SEM_ID_OPERADORA", 40);
+  const idWinity = sanitizarNomeParaFs(dados.site_id_detentor || "SEM_ID_WINITY", 40);
+  const cidade = sanitizarNomeParaFs(dados.cidade || "SEM_CIDADE", 50);
 
-  // Sanitizar para uso em nome de arquivo (remover caracteres inválidos)
-  const sanitizar = (str: string) => str.replace(/[<>:"/\\|?*]/g, "_").trim();
-
-  const nomeArquivo = `[NDD] WINITY_${sanitizar(idOperadora)}_${sanitizar(idWinity)}_${sanitizar(cidade)}_${sanitizar(idOperadora)}.xlsx`;
+  const baseNome = `[NDD] WINITY_${idOperadora}_${idWinity}_${cidade}_${idOperadora}`;
+  const nomeArquivo = `${sanitizarNomeParaFs(baseNome, 180)}.xlsx`;
 
   return {
     blob,

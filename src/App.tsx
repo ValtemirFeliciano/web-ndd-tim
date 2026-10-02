@@ -331,20 +331,37 @@ export default function App() {
       saidaUrlRef.current = url;
       setSaidaExcel({ url, nome: r.nomeArquivo, aba: r.abaUsada, celulas: r.celulasEscritas, kb: formatarBytes(r.blob.size) });
 
-      // Se houver pasta padrão configurada, salva diretamente na subpasta [NDD] WINITY_...
+      let salvouNaPasta = false;
+
+      // Se houver pasta padrão configurada, tenta salvar na subpasta [NDD] WINITY_...
       if (pastaPadrao.nome) {
-        const handle = await pastaPadrao.obterHandleComPermissao();
-        if (handle) {
-          const res = await salvarNddIndividualEmSubpasta(handle, r.nomeArquivo, r.blob);
-          setSalvoEmPasta({ pasta: `${pastaPadrao.nome}/${res.pastaCriada}`, arquivo: res.arquivoCriado });
-          log("ok", `Sucesso! Planilha salva na subpasta "${pastaPadrao.nome}/${res.pastaCriada}/${res.arquivoCriado}".`);
-          return;
+        try {
+          const handle = await pastaPadrao.obterHandleComPermissao();
+          if (handle) {
+            const res = await salvarNddIndividualEmSubpasta(handle, r.nomeArquivo, r.blob);
+            setSalvoEmPasta({ pasta: `${pastaPadrao.nome}/${res.pastaCriada}`, arquivo: res.arquivoCriado });
+            log("ok", `Sucesso! Planilha salva na subpasta "${pastaPadrao.nome}/${res.pastaCriada}/${res.arquivoCriado}".`);
+            salvouNaPasta = true;
+          } else {
+            log("warn", `Acesso à pasta padrão "${pastaPadrao.nome}" não pôde ser validado (permissão não concedida ou pasta movida). O arquivo será baixado normalmente.`);
+          }
+        } catch (errFs: any) {
+          console.warn("[NDDForge] Erro ao gravar na pasta padrão:", errFs);
+          const isNotFound = errFs?.name === "NotFoundError" || /not found/i.test(errFs?.message || "");
+          if (isNotFound) {
+            log("warn", `A pasta padrão "${pastaPadrao.nome}" não foi encontrada no disco (pode ter sido renomeada ou excluída). Redefina a pasta padrão.`);
+            await pastaPadrao.removerPasta();
+          } else {
+            log("warn", `Não foi possível salvar na pasta padrão (${errFs?.message || errFs}). O download convencional será realizado.`);
+          }
         }
       }
 
-      // Fallback: se não houver pasta padrão, dispara download do navegador
-      baixarBlob(r.blob, r.nomeArquivo);
-      log("ok", `Download iniciado: ${r.nomeArquivo} · aba "${r.abaUsada}" · ${r.celulasEscritas} células · ${formatarBytes(r.blob.size)}. Resumo/Gabinete preservados.`);
+      // Se não havia pasta padrão ou se falhou a gravação na pasta: dispara download convencional do navegador
+      if (!salvouNaPasta) {
+        baixarBlob(r.blob, r.nomeArquivo);
+        log("ok", `Download iniciado: ${r.nomeArquivo} · aba "${r.abaUsada}" · ${r.celulasEscritas} células · ${formatarBytes(r.blob.size)}. Resumo/Gabinete preservados.`);
+      }
     } catch (e: any) {
       const msg = e?.message ?? String(e);
       console.error("[NDDForge] Falha ao gerar o Excel:", e);

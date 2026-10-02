@@ -7,6 +7,7 @@ import {
   removerPastaPadrao,
   obterNomePastaPadraoCache,
   verificarEObterPermissao,
+  testarHandleAcessivel,
   EVENTO_PASTA_PADRAO,
 } from "../lib/fileSystem";
 
@@ -111,8 +112,16 @@ export function usePastaPadrao(): UsePastaPadraoReturn {
     }
     if (!h) return null;
 
-    const ok = await verificarEObterPermissao(h, "readwrite");
-    return ok ? h : null;
+    const acessivel = await testarHandleAcessivel(h);
+    if (!acessivel) {
+      console.warn("[NDDForge] Pasta padrão configurada não está mais acessível no disco. Limpando handle salvo.");
+      await removerPastaPadrao();
+      setHandle(null);
+      setNome(null);
+      return null;
+    }
+
+    return h;
   }, [handle]);
 
   return {

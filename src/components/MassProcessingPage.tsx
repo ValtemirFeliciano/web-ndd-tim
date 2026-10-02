@@ -563,7 +563,13 @@ export default function MassProcessingPage({
       log("ok", `Sucesso! ${arquivos.length} planilha(s) NDD gravada(s) em subpastas organizadas dentro de "${nomeDestino}".`);
     } catch (e: any) {
       if (e?.name !== "AbortError") {
-        log("error", `Erro ao salvar NDDs na pasta: ${e?.message ?? e}`);
+        const isNotFound = e?.name === "NotFoundError" || /not found/i.test(e?.message || "");
+        if (isNotFound) {
+          log("error", "A pasta configurada não foi encontrada no disco (pode ter sido renomeada, removida ou desvinculada). Redefina a pasta padrão de destino.");
+          await pastaPadrao.removerPasta();
+        } else {
+          log("error", `Erro ao salvar NDDs na pasta: ${e?.message ?? e}`);
+        }
       }
     } finally {
       setExportando(false);
