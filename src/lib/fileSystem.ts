@@ -179,10 +179,14 @@ export async function verificarEObterPermissao(handle: any, mode: "read" | "read
  * (compatível com Windows NTFS/FAT32, Linux e macOS).
  * Remove caracteres proibidos, espaços/pontos no final, caracteres de controle e quebras de linha.
  */
-export function sanitizarNomeParaFs(str: string, maxLen = 120): string {
+export function sanitizarNomeParaFs(str: string, maxLen = 80): string {
   if (!str) return "SEM_NOME";
 
   let limpo = str
+    // Normaliza acentos removendo diacríticos (ex: Arapuá -> Arapua, Três -> Tres)
+    // para máxima compatibilidade com Windows NTFS e ferramentas de automação
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     // Substitui quebras de linha, tabulações e retornos por espaço
     .replace(/[\r\n\t]+/g, " ")
     // Remove caracteres de controle ASCII não imprimíveis (0x00 a 0x1F e 0x7F)
@@ -208,7 +212,7 @@ export function sanitizarNomeParaFs(str: string, maxLen = 120): string {
     limpo = `${limpo}_item`;
   }
 
-  // Limita o tamanho de cada componente de nome para evitar ultrapassar limites de caminho do sistema
+  // Limita o tamanho de cada componente de nome para evitar ultrapassar MAX_PATH (260) no Windows
   if (limpo.length > maxLen) {
     limpo = limpo.slice(0, maxLen).trim().replace(/[. ]+$/, "");
   }
@@ -218,14 +222,12 @@ export function sanitizarNomeParaFs(str: string, maxLen = 120): string {
 
 /**
  * Testa se um DirectoryHandle ainda é acessível no disco e possui permissão de leitura e gravação.
- * Se o diretório foi movido, renomeado ou excluído no Windows/disco, lança ou retorna false.
  */
 export async function testarHandleAcessivel(handle: any): Promise<boolean> {
   if (!handle) return false;
   try {
     const perm = await verificarEObterPermissao(handle, "readwrite");
     if (!perm) return false;
-    // Tenta iterar uma entrada para verificar se o diretório existe fisicamente no sistema de arquivos
     const iter = handle.values();
     await iter.next();
     return true;
@@ -240,24 +242,42 @@ export async function testarHandleAcessivel(handle: any): Promise<boolean> {
 /* ------------------------------------------------------------------ */
 
 /**
- * Salva uma única NDD criando a subpasta [NDD] WINITY_... e o arquivo .xlsx dentro dela
+ * Salva uma única NDD criando a subpasta [NDD] WINITY_... e o arquivo .xlsx dentro dela.
+ * Caso a subpasta falhe (ex: caminho total ultrapassando o limite MAX_PATH do Windows),
+ * salva diretamente na pasta raiz configurada como fallback seguro.
  */
 export async function salvarNddIndividualEmSubpasta(
   dirHandle: any,
   nomeArquivo: string,
   blob: Blob
-): Promise<{ pastaCriada: string; arquivoCriado: string }> {
-  // Nome da subpasta é exatamente o nome do arquivo sem .xlsx com sanitização estrita para o SO
+): Promise<{ pastaCriada: string; arquivoCriado: string; salvoEmSubpasta: boolean }> {
   const nomeSemExt = nomeArquivo.replace(/\.xlsx$/i, "");
-  const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
-  const arquivoFinal = `${nomePasta}.xlsx`;
+  const nomePasta = sanitizarNomeParaFs(nomeSemExt, 80);
+  const arquivoFinal = `${sanitizarNomeParaFs(nomeSemExt, 80)}.xlsx`;
 
-  const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
-  const fileHandle = await subDirHandle.getFileHandle(arquivoFinal, { create: true });
-  const writable = await fileHandle.createWritable();
-  await writable.write(blob);
-  await writable.close();
-  return { pastaCriada: nomePasta, arquivoCriado: arquivoFinal };
+  // 1. Tenta criar a subpasta [NDD] WINITY_... e gravar o arquivo dentro dela
+  try {
+    const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
+    const fileHandle = await subDirHandle.getFileHandle(arquivoFinal, { create: true });
+    const writable = await fileHandle.createWritable();
+    await writable.write(blob);
+    await writable.close();
+    return { pastaCriada: nomePasta, arquivoCriado: arquivoFinal, salvoEmSubpasta: true };
+  } catch (errSub: any) {
+    console.warn(`[NDDForge] Gravação na subpasta "${nomePasta}" falhou (${errSub?.message || errSub}). Tentando gravar diretamente na pasta raiz...`);
+    
+    // 2. Fallback: Grava diretamente na pasta padrão do usuário sem a subpasta intermediária
+    try {
+      const fileHandleRaiz = await dirHandle.getFileHandle(arquivoFinal, { create: true });
+      const writableRaiz = await fileHandleRaiz.createWritable();
+      await writableRaiz.write(blob);
+      await writableRaiz.close();
+      return { pastaCriada: dirHandle.name || "Pasta Padrão", arquivoCriado: arquivoFinal, salvoEmSubpasta: false };
+    } catch (errRaiz: any) {
+      console.error("[NDDForge] Falha também ao gravar na pasta raiz:", errRaiz);
+      throw errRaiz;
+    }
+  }
 }
 
 /**
@@ -266,8 +286,8 @@ export async function salvarNddIndividualEmSubpasta(
 export async function gerarZipNddIndividual(nomeArquivo: string, blob: Blob): Promise<Blob> {
   const zip = new JSZip();
   const nomeSemExt = nomeArquivo.replace(/\.xlsx$/i, "");
-  const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
-  const arquivoFinal = `${nomePasta}.xlsx`;
+  const nomePasta = sanitizarNomeParaFs(nomeSemExt, 80);
+  const arquivoFinal = `${sanitizarNomeParaFs(nomeSemExt, 80)}.xlsx`;
   zip.folder(nomePasta)?.file(arquivoFinal, blob);
   return await zip.generateAsync({
     type: "blob",
@@ -280,6 +300,7 @@ export async function gerarZipNddIndividual(nomeArquivo: string, blob: Blob): Pr
  * Grava uma lista de arquivos diretamente no diretório do sistema de arquivos,
  * criando para CADA planilha sua respectiva subpasta:
  * [NDD] WINITY_{ID_OPERADORA}_{ID_WINITY}_{CIDADE}_{ID_OPERADORA} / [NDD] WINITY_....xlsx
+ * com fallback para gravação direta caso a subpasta exceda o limite de caracteres do SO.
  */
 export async function salvarArquivosEmPasta(
   dirHandle: any,
@@ -290,18 +311,30 @@ export async function salvarArquivosEmPasta(
   for (let i = 0; i < arquivos.length; i++) {
     const arq = arquivos[i];
     const nomeSemExt = arq.nome.replace(/\.xlsx$/i, "");
-    const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
-    const arquivoFinal = `${nomePasta}.xlsx`;
+    const nomePasta = sanitizarNomeParaFs(nomeSemExt, 80);
+    const arquivoFinal = `${sanitizarNomeParaFs(nomeSemExt, 80)}.xlsx`;
     onProgresso?.(i + 1, arquivos.length, `${nomePasta}/${arquivoFinal}`);
     
-    // Cria ou abre a subpasta com o nome da NDD
-    const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
-    // Cria a planilha dentro da subpasta
-    const fileHandle = await subDirHandle.getFileHandle(arquivoFinal, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(arq.blob);
-    await writable.close();
-    salvos++;
+    try {
+      // Cria ou abre a subpasta com o nome da NDD
+      const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
+      const fileHandle = await subDirHandle.getFileHandle(arquivoFinal, { create: true });
+      const writable = await fileHandle.createWritable();
+      await writable.write(arq.blob);
+      await writable.close();
+      salvos++;
+    } catch (errSub: any) {
+      console.warn(`[NDDForge Lote] Gravação na subpasta "${nomePasta}" falhou. Tentando na pasta raiz...`, errSub);
+      try {
+        const fileHandleRaiz = await dirHandle.getFileHandle(arquivoFinal, { create: true });
+        const writableRaiz = await fileHandleRaiz.createWritable();
+        await writableRaiz.write(arq.blob);
+        await writableRaiz.close();
+        salvos++;
+      } catch (errRaiz) {
+        console.error(`[NDDForge Lote] Falha ao gravar "${arquivoFinal}":`, errRaiz);
+      }
+    }
   }
   return salvos;
 }
@@ -314,8 +347,8 @@ export async function gerarPacoteZip(arquivos: ArquivoSalvar[]): Promise<Blob> {
   const zip = new JSZip();
   arquivos.forEach((arq) => {
     const nomeSemExt = arq.nome.replace(/\.xlsx$/i, "");
-    const nomePasta = sanitizarNomeParaFs(nomeSemExt, 180);
-    const arquivoFinal = `${nomePasta}.xlsx`;
+    const nomePasta = sanitizarNomeParaFs(nomeSemExt, 80);
+    const arquivoFinal = `${sanitizarNomeParaFs(nomeSemExt, 80)}.xlsx`;
     zip.folder(nomePasta)?.file(arquivoFinal, arq.blob);
   });
   return await zip.generateAsync({

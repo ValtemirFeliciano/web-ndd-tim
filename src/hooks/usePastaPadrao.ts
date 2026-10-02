@@ -112,16 +112,14 @@ export function usePastaPadrao(): UsePastaPadraoReturn {
     }
     if (!h) return null;
 
-    const acessivel = await testarHandleAcessivel(h);
-    if (!acessivel) {
-      console.warn("[NDDForge] Pasta padrão configurada não está mais acessível no disco. Limpando handle salvo.");
-      await removerPastaPadrao();
-      setHandle(null);
-      setNome(null);
-      return null;
+    try {
+      const ok = await verificarEObterPermissao(h, "readwrite");
+      if (ok) return h;
+    } catch (e) {
+      console.warn("[NDDForge] Erro ao obter permissão da pasta padrão:", e);
     }
 
-    return h;
+    return null;
   }, [handle]);
 
   return {

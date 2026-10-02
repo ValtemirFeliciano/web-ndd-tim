@@ -890,12 +890,12 @@ export async function gerarNddPreenchido(
   });
 
   // Gerar nome do arquivo seguindo o padrão: [NDD] WINITY_{ID_OPERADORA}_{ID_WINITY}_{CIDADE}_{ID_OPERADORA}
-  const idOperadora = sanitizarNomeParaFs(dados.site_id_cliente || "SEM_ID_OPERADORA", 40);
-  const idWinity = sanitizarNomeParaFs(dados.site_id_detentor || "SEM_ID_WINITY", 40);
-  const cidade = sanitizarNomeParaFs(dados.cidade || "SEM_CIDADE", 50);
+  const idOperadora = sanitizarNomeParaFs(dados.site_id_cliente || "SEM_ID_OPERADORA", 25);
+  const idWinity = sanitizarNomeParaFs(dados.site_id_detentor || "SEM_ID_WINITY", 20);
+  const cidade = sanitizarNomeParaFs(dados.cidade || "SEM_CIDADE", 30);
 
   const baseNome = `[NDD] WINITY_${idOperadora}_${idWinity}_${cidade}_${idOperadora}`;
-  const nomeArquivo = `${sanitizarNomeParaFs(baseNome, 180)}.xlsx`;
+  const nomeArquivo = `${sanitizarNomeParaFs(baseNome, 90)}.xlsx`;
 
   return {
     blob,

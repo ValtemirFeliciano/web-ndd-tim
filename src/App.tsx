@@ -320,6 +320,17 @@ export default function App() {
     setGerando(true);
     setErroExcel("");
     setSalvoEmPasta(null);
+
+    // Valida a autorização da pasta imediatamente sob o clique do usuário (para não expirar o gesto do navegador)
+    let handlePasta: any = null;
+    if (pastaPadrao.nome) {
+      try {
+        handlePasta = await pastaPadrao.obterHandleComPermissao();
+      } catch (errPerm) {
+        console.warn("[NDDForge] Erro ao obter permissão da pasta padrão:", errPerm);
+      }
+    }
+
     log("info", template ? `Gerando Excel sobre o template "${template.nome}"…` : "Gerando Excel com o template padrão embutido…");
     try {
       const r = await gerarNddPreenchido(dados, cfg, template?.buffer ?? null, log);
@@ -333,28 +344,24 @@ export default function App() {
 
       let salvouNaPasta = false;
 
-      // Se houver pasta padrão configurada, tenta salvar na subpasta [NDD] WINITY_...
-      if (pastaPadrao.nome) {
+      // Se houver pasta padrão configurada e autorizada, salva no disco (em subpasta ou direto na raiz)
+      if (handlePasta) {
         try {
-          const handle = await pastaPadrao.obterHandleComPermissao();
-          if (handle) {
-            const res = await salvarNddIndividualEmSubpasta(handle, r.nomeArquivo, r.blob);
+          const res = await salvarNddIndividualEmSubpasta(handlePasta, r.nomeArquivo, r.blob);
+          if (res.salvoEmSubpasta) {
             setSalvoEmPasta({ pasta: `${pastaPadrao.nome}/${res.pastaCriada}`, arquivo: res.arquivoCriado });
             log("ok", `Sucesso! Planilha salva na subpasta "${pastaPadrao.nome}/${res.pastaCriada}/${res.arquivoCriado}".`);
-            salvouNaPasta = true;
           } else {
-            log("warn", `Acesso à pasta padrão "${pastaPadrao.nome}" não pôde ser validado (permissão não concedida ou pasta movida). O arquivo será baixado normalmente.`);
+            setSalvoEmPasta({ pasta: pastaPadrao.nome || res.pastaCriada, arquivo: res.arquivoCriado });
+            log("ok", `Sucesso! Planilha salva na pasta padrão "${pastaPadrao.nome}/${res.arquivoCriado}".`);
           }
+          salvouNaPasta = true;
         } catch (errFs: any) {
           console.warn("[NDDForge] Erro ao gravar na pasta padrão:", errFs);
-          const isNotFound = errFs?.name === "NotFoundError" || /not found/i.test(errFs?.message || "");
-          if (isNotFound) {
-            log("warn", `A pasta padrão "${pastaPadrao.nome}" não foi encontrada no disco (pode ter sido renomeada ou excluída). Redefina a pasta padrão.`);
-            await pastaPadrao.removerPasta();
-          } else {
-            log("warn", `Não foi possível salvar na pasta padrão (${errFs?.message || errFs}). O download convencional será realizado.`);
-          }
+          log("warn", `Não foi possível salvar na pasta padrão "${pastaPadrao.nome}" (${errFs?.message || errFs}). O download convencional foi iniciado.`);
         }
+      } else if (pastaPadrao.nome) {
+        log("warn", `Acesso à pasta padrão "${pastaPadrao.nome}" não pôde ser autorizado. O download convencional foi iniciado.`);
       }
 
       // Se não havia pasta padrão ou se falhou a gravação na pasta: dispara download convencional do navegador
