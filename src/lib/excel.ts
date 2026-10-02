@@ -895,7 +895,7 @@ export async function gerarNddPreenchido(
   const cidade = sanitizarNomeParaFs(dados.cidade || "SEM_CIDADE", 30);
 
   const baseNome = `[NDD] WINITY_${idOperadora}_${idWinity}_${cidade}_${idOperadora}`;
-  const nomeArquivo = `${sanitizarNomeParaFs(baseNome, 90)}.xlsx`;
+  const nomeArquivo = `${sanitizarNomeParaFs(baseNome, 65)}.xlsx`;
 
   return {
     blob,
