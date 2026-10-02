@@ -73,8 +73,147 @@ export async function selecionarPastaSaida(): Promise<any> {
   });
 }
 
+/* ------------------------------------------------------------------ */
+/*  Persistência da Pasta Padrão no Navegador (IndexedDB)             */
+/* ------------------------------------------------------------------ */
+
+const DB_NAME = "ndd_forge_fs_db";
+const STORE_NAME = "handles";
+const KEY_PASTA_PADRAO = "pasta_padrao_ndd";
+export const EVENTO_PASTA_PADRAO = "nddforge:pastaPadraoChanged";
+
+function abrirDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined") {
+      reject(new Error("IndexedDB não disponível."));
+      return;
+    }
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Salva o handle da pasta padrão no IndexedDB e seu nome no localStorage */
+export async function salvarPastaPadrao(handle: any): Promise<void> {
+  const db = await abrirDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    const req = store.put(handle, KEY_PASTA_PADRAO);
+    req.onsuccess = () => {
+      try {
+        const nome = handle.name || "Pasta Selecionada";
+        localStorage.setItem("nddforge.pastaPadraoNome", nome);
+        window.dispatchEvent(new CustomEvent(EVENTO_PASTA_PADRAO, { detail: { nome } }));
+      } catch {}
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Obtém o handle da pasta padrão salvo no IndexedDB (se existir) */
+export async function obterPastaPadrao(): Promise<any | null> {
+  if (!suportaDirectoryPicker()) return null;
+  try {
+    const db = await abrirDb();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.get(KEY_PASTA_PADRAO);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Remove a pasta padrão configurada */
+export async function removerPastaPadrao(): Promise<void> {
+  try {
+    const db = await abrirDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const req = store.delete(KEY_PASTA_PADRAO);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+    localStorage.removeItem("nddforge.pastaPadraoNome");
+    window.dispatchEvent(new CustomEvent(EVENTO_PASTA_PADRAO, { detail: { nome: null } }));
+  } catch {}
+}
+
+/** Lê o nome da pasta padrão salvo em cache síncrono */
+export function obterNomePastaPadraoCache(): string | null {
+  try {
+    return localStorage.getItem("nddforge.pastaPadraoNome");
+  } catch {
+    return null;
+  }
+}
+
+/** Verifica se a permissão de leitura/gravação já foi concedida ou solicita sob clique do usuário */
+export async function verificarEObterPermissao(handle: any, mode: "read" | "readwrite" = "readwrite"): Promise<boolean> {
+  if (!handle) return false;
+  try {
+    const status = await handle.queryPermission({ mode });
+    if (status === "granted") return true;
+    const requestStatus = await handle.requestPermission({ mode });
+    return requestStatus === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Gravação e Empacotamento com Criação Automática de Subpastas      */
+/* ------------------------------------------------------------------ */
+
 /**
- * Grava uma lista de arquivos diretamente no diretório do sistema de arquivos
+ * Salva uma única NDD criando a subpasta [NDD] WINITY_... e o arquivo .xlsx dentro dela
+ */
+export async function salvarNddIndividualEmSubpasta(
+  dirHandle: any,
+  nomeArquivo: string,
+  blob: Blob
+): Promise<{ pastaCriada: string; arquivoCriado: string }> {
+  // Nome da subpasta é exatamente o nome do arquivo sem .xlsx
+  const nomePasta = nomeArquivo.replace(/\.xlsx$/i, "");
+  const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
+  const fileHandle = await subDirHandle.getFileHandle(nomeArquivo, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(blob);
+  await writable.close();
+  return { pastaCriada: nomePasta, arquivoCriado: nomeArquivo };
+}
+
+/**
+ * Gera um pacote .ZIP contendo a pasta [NDD] WINITY_... e o arquivo .xlsx dentro dela
+ */
+export async function gerarZipNddIndividual(nomeArquivo: string, blob: Blob): Promise<Blob> {
+  const zip = new JSZip();
+  const nomePasta = nomeArquivo.replace(/\.xlsx$/i, "");
+  zip.folder(nomePasta)?.file(nomeArquivo, blob);
+  return await zip.generateAsync({
+    type: "blob",
+    compression: "DEFLATE",
+    compressionOptions: { level: 6 },
+  });
+}
+
+/**
+ * Grava uma lista de arquivos diretamente no diretório do sistema de arquivos,
+ * criando para CADA planilha sua respectiva subpasta:
+ * [NDD] WINITY_{ID_OPERADORA}_{ID_WINITY}_{CIDADE}_{ID_OPERADORA} / [NDD] WINITY_....xlsx
  */
 export async function salvarArquivosEmPasta(
   dirHandle: any,
@@ -84,8 +223,13 @@ export async function salvarArquivosEmPasta(
   let salvos = 0;
   for (let i = 0; i < arquivos.length; i++) {
     const arq = arquivos[i];
-    onProgresso?.(i + 1, arquivos.length, arq.nome);
-    const fileHandle = await dirHandle.getFileHandle(arq.nome, { create: true });
+    const nomePasta = arq.nome.replace(/\.xlsx$/i, "");
+    onProgresso?.(i + 1, arquivos.length, `${nomePasta}/${arq.nome}`);
+    
+    // Cria ou abre a subpasta com o nome da NDD
+    const subDirHandle = await dirHandle.getDirectoryHandle(nomePasta, { create: true });
+    // Cria a planilha dentro da subpasta
+    const fileHandle = await subDirHandle.getFileHandle(arq.nome, { create: true });
     const writable = await fileHandle.createWritable();
     await writable.write(arq.blob);
     await writable.close();
@@ -95,12 +239,14 @@ export async function salvarArquivosEmPasta(
 }
 
 /**
- * Compacta múltiplos arquivos em um único pacote .ZIP
+ * Compacta múltiplos arquivos em um único pacote .ZIP,
+ * organizando cada planilha dentro de sua própria subpasta [NDD] WINITY_.../
  */
 export async function gerarPacoteZip(arquivos: ArquivoSalvar[]): Promise<Blob> {
   const zip = new JSZip();
   arquivos.forEach((arq) => {
-    zip.file(arq.nome, arq.blob);
+    const nomePasta = arq.nome.replace(/\.xlsx$/i, "");
+    zip.folder(nomePasta)?.file(arq.nome, arq.blob);
   });
   return await zip.generateAsync({
     type: "blob",
@@ -126,3 +272,4 @@ export function lerArquivoComoBase64(file: File): Promise<{ base64: string; mime
     reader.readAsDataURL(file);
   });
 }
+

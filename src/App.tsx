@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Braces, Copy, Download, FileDown, FileJson2, Radar, Sparkles } from "lucide-react";
+import { Braces, Copy, Download, FileDown, FileJson2, Radar, Sparkles, FolderTree, FolderCheck, FolderPlus, FolderArchive, Trash2, FolderOpen } from "lucide-react";
 import Header, { type TesteState } from "./components/Header";
 import UploadZones, { formatarBytes } from "./components/UploadZones";
 import ExtractionPanel from "./components/ExtractionPanel";
@@ -9,6 +9,8 @@ import MassProcessingPage from "./components/MassProcessingPage";
 import { extrairDoPdf, listarModelos, testarConexao, validarDados, MODELOS_PADRAO } from "./lib/gemini";
 import { gerarNddPreenchido, baixarBlob } from "./lib/excel";
 import { carregarConfig, salvarConfig, montarPromptFinal, INSTRUCOES_BTS, INSTRUCOES_COLLO } from "./lib/mapping";
+import { usePastaPadrao } from "./hooks/usePastaPadrao";
+import { salvarNddIndividualEmSubpasta, gerarZipNddIndividual } from "./lib/fileSystem";
 import { logger } from "./lib/logger";
 import {
   EQUIPAMENTO_VAZIO,
@@ -69,6 +71,9 @@ export default function App() {
   const [dados, setDados] = useState<DadosPPI | null>(ultima?.dados ?? null);
   const [meta, setMeta] = useState<ResultadoExtracao | null>(ultima ? ({ em: ultima.meta } as ResultadoExtracao) : null);
   const [avisos, setAvisos] = useState<string[]>(ultima ? validarDados(ultima.dados) : []);
+
+  const pastaPadrao = usePastaPadrao();
+  const [salvoEmPasta, setSalvoEmPasta] = useState<{ pasta: string; arquivo: string } | null>(null);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const logId = useRef(0);
@@ -314,6 +319,7 @@ export default function App() {
     if (!dados) return;
     setGerando(true);
     setErroExcel("");
+    setSalvoEmPasta(null);
     log("info", template ? `Gerando Excel sobre o template "${template.nome}"…` : "Gerando Excel com o template padrão embutido…");
     try {
       const r = await gerarNddPreenchido(dados, cfg, template?.buffer ?? null, log);
@@ -324,6 +330,19 @@ export default function App() {
       const url = URL.createObjectURL(r.blob);
       saidaUrlRef.current = url;
       setSaidaExcel({ url, nome: r.nomeArquivo, aba: r.abaUsada, celulas: r.celulasEscritas, kb: formatarBytes(r.blob.size) });
+
+      // Se houver pasta padrão configurada, salva diretamente na subpasta [NDD] WINITY_...
+      if (pastaPadrao.nome) {
+        const handle = await pastaPadrao.obterHandleComPermissao();
+        if (handle) {
+          const res = await salvarNddIndividualEmSubpasta(handle, r.nomeArquivo, r.blob);
+          setSalvoEmPasta({ pasta: `${pastaPadrao.nome}/${res.pastaCriada}`, arquivo: res.arquivoCriado });
+          log("ok", `Sucesso! Planilha salva na subpasta "${pastaPadrao.nome}/${res.pastaCriada}/${res.arquivoCriado}".`);
+          return;
+        }
+      }
+
+      // Fallback: se não houver pasta padrão, dispara download do navegador
       baixarBlob(r.blob, r.nomeArquivo);
       log("ok", `Download iniciado: ${r.nomeArquivo} · aba "${r.abaUsada}" · ${r.celulasEscritas} células · ${formatarBytes(r.blob.size)}. Resumo/Gabinete preservados.`);
     } catch (e: any) {
@@ -337,6 +356,20 @@ export default function App() {
       log("error", `Falha ao gerar o .xlsx: ${amigavel}`, typeof e?.stack === "string" ? e.stack : undefined);
     } finally {
       setGerando(false);
+    }
+  };
+
+  const baixarZipComPasta = async () => {
+    if (!dados) return;
+    try {
+      log("info", "Gerando pacote .ZIP contendo a pasta da NDD…");
+      const r = await gerarNddPreenchido(dados, cfg, template?.buffer ?? null, log);
+      const zipBlob = await gerarZipNddIndividual(r.nomeArquivo, r.blob);
+      const nomeZip = `${r.nomeArquivo.replace(/\.xlsx$/i, "")}.zip`;
+      baixarBlob(zipBlob, nomeZip);
+      log("ok", `Pacote ZIP "${nomeZip}" baixado com sucesso contendo a subpasta com o arquivo .xlsx.`);
+    } catch (e: any) {
+      log("error", `Erro ao gerar ZIP da NDD: ${e?.message ?? e}`);
     }
   };
 
@@ -559,18 +592,39 @@ export default function App() {
                   disabled={gerando}
                   className="flex items-center justify-center gap-2 rounded-md bg-ok-500 px-5 py-3 font-display text-sm font-bold uppercase tracking-wide text-ink-950 shadow-[0_8px_24px_-10px_rgba(16,185,129,0.6)] transition-all hover:bg-ok-400 active:translate-y-px disabled:opacity-50"
                 >
-                  {gerando ? <Radar size={16} className="animate-spin" /> : <Download size={16} />}
-                  {gerando ? "Montando planilha…" : "Gerar NDD preenchido (.xlsx)"}
+                  {gerando ? (
+                    <Radar size={16} className="animate-spin" />
+                  ) : pastaPadrao.nome ? (
+                    <FolderCheck size={16} />
+                  ) : (
+                    <Download size={16} />
+                  )}
+                  {gerando
+                    ? "Montando planilha…"
+                    : pastaPadrao.nome
+                    ? `Gerar NDD em Pasta (${pastaPadrao.nome})`
+                    : "Gerar NDD preenchido (.xlsx)"}
                 </button>
+
+                {/* Botão Secundário: ZIP contendo a subpasta [NDD] WINITY_... */}
+                <button
+                  onClick={baixarZipComPasta}
+                  disabled={gerando}
+                  className="flex items-center justify-center gap-2 rounded-md border border-cyan-500/50 bg-cyan-500/10 px-5 py-2 font-display text-xs font-semibold uppercase tracking-wide text-cyan-300 transition-colors hover:bg-cyan-500/20 disabled:opacity-50"
+                  title="Baixar pacote .zip contendo a pasta [NDD] WINITY_... com o arquivo .xlsx dentro"
+                >
+                  <FolderArchive size={14} /> Baixar .ZIP com pasta
+                </button>
+
                 <button
                   onClick={baixarJson}
-                  className="flex items-center justify-center gap-2 rounded-md border border-cyan-500/50 px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-wide text-cyan-300 transition-colors hover:bg-cyan-500/10"
+                  className="flex items-center justify-center gap-2 rounded-md border border-ink-600 bg-ink-850 px-5 py-2 font-display text-xs font-semibold uppercase tracking-wide text-mist-300 transition-colors hover:bg-ink-800"
                 >
                   <FileJson2 size={14} /> Baixar JSON da extração
                 </button>
                 <button
                   onClick={baixarLogCompleto}
-                  className="flex items-center justify-center gap-2 rounded-md border border-amber-500/50 px-5 py-2.5 font-display text-xs font-semibold uppercase tracking-wide text-amber-300 transition-colors hover:bg-amber-500/10"
+                  className="flex items-center justify-center gap-2 rounded-md border border-amber-500/50 px-5 py-2 font-display text-xs font-semibold uppercase tracking-wide text-amber-300 transition-colors hover:bg-amber-500/10"
                 >
                   <Download size={14} /> Baixar log completo (.txt)
                 </button>
@@ -609,15 +663,39 @@ export default function App() {
                         </p>
                       </div>
                     </div>
-                    <a
-                      href={saidaExcel.url}
-                      download={saidaExcel.nome}
-                      className="mt-2.5 flex min-w-0 items-center justify-center gap-2 overflow-hidden rounded border border-ok-500/60 bg-ok-500/15 px-3 py-2 font-display text-xs font-bold uppercase tracking-wide text-ok-400 transition-colors hover:bg-ok-500/25"
-                    >
-                      <Download size={13} className="shrink-0" /> <span className="truncate">Baixar novamente</span>
-                    </a>
+
+                    {salvoEmPasta && (
+                      <div className="mt-2.5 rounded border border-cyan-500/40 bg-cyan-500/15 p-2.5 font-mono text-[11px] text-cyan-300">
+                        <p className="font-semibold flex items-center gap-1.5 text-cyan-200">
+                          <FolderCheck size={14} className="text-cyan-400 shrink-0" /> Salvo em subpasta no computador:
+                        </p>
+                        <p className="mt-1 truncate text-[10px] text-mist-200" title={salvoEmPasta.pasta}>
+                          📁 {salvoEmPasta.pasta}
+                        </p>
+                        <p className="truncate text-[10px] text-mist-400" title={salvoEmPasta.arquivo}>
+                          ↳ 📄 {salvoEmPasta.arquivo}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="mt-2.5 flex flex-wrap gap-2">
+                      <a
+                        href={saidaExcel.url}
+                        download={saidaExcel.nome}
+                        className="flex-1 flex min-w-0 items-center justify-center gap-1.5 overflow-hidden rounded border border-ok-500/60 bg-ok-500/15 px-3 py-2 font-display text-xs font-bold uppercase tracking-wide text-ok-400 transition-colors hover:bg-ok-500/25"
+                      >
+                        <Download size={13} className="shrink-0" /> <span className="truncate">Baixar .xlsx</span>
+                      </a>
+                      <button
+                        onClick={baixarZipComPasta}
+                        className="flex-1 flex min-w-0 items-center justify-center gap-1.5 overflow-hidden rounded border border-cyan-500/60 bg-cyan-500/15 px-3 py-2 font-display text-xs font-bold uppercase tracking-wide text-cyan-300 transition-colors hover:bg-cyan-500/25"
+                        title="Baixar pacote .zip com a subpasta e a planilha dentro"
+                      >
+                        <FolderArchive size={13} className="shrink-0" /> <span className="truncate">Baixar .ZIP</span>
+                      </button>
+                    </div>
                     <p className="mt-1.5 text-center font-mono text-[9px] uppercase tracking-wider text-mist-600">
-                      o download automático já começou — se o navegador bloqueou, clique acima
+                      {salvoEmPasta ? "arquivo gravado na subpasta · você também pode baixar cópias avulsas acima" : "download automático já iniciado"}
                     </p>
                   </div>
                 )}
@@ -643,6 +721,65 @@ export default function App() {
                 </p>
               ))}
             </div>
+          </div>
+
+          {/* ============================================================== */}
+          {/*  PASTA PADRÃO DE DESTINO (NDD) - Marcado de azul na Imagem 1   */}
+          {/* ============================================================== */}
+          <div className="rise-in tick-panel rounded-md p-4 border border-ink-700 bg-ink-850/80" style={{ animationDelay: "0.28s" }}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.2em] text-mist-400">
+                <FolderTree size={12} className="text-cyan-400" /> Pasta Padrão de Destino
+              </p>
+              {pastaPadrao.nome && (
+                <span className="flex items-center gap-1.5 font-mono text-[9px] text-ok-400 bg-ok-500/10 px-2 py-0.5 rounded border border-ok-500/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-ok-400 animate-pulse" /> Ativa
+                </span>
+              )}
+            </div>
+
+            <p className="font-mono text-[10px] leading-relaxed text-mist-400 mb-3">
+              {pastaPadrao.nome
+                ? `As NDDs serão salvas em subpastas organizadas automaticamente nesta pasta.`
+                : `Defina uma pasta fixa no seu computador para criar a pasta [NDD] WINITY_... com a planilha dentro sem perguntar toda vez.`}
+            </p>
+
+            {pastaPadrao.nome ? (
+              <div className="rounded border border-ink-600 bg-ink-900/90 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <FolderCheck size={16} className="text-cyan-400 shrink-0" />
+                    <span className="truncate font-mono text-xs font-semibold text-mist-100" title={pastaPadrao.nome}>
+                      {pastaPadrao.nome}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => pastaPadrao.definirPasta()}
+                      className="rounded border border-ink-600 bg-ink-800 px-2 py-1 font-mono text-[10px] text-cyan-300 hover:border-cyan-400 hover:bg-cyan-500/10"
+                      title="Escolher outra pasta padrão"
+                    >
+                      Alterar
+                    </button>
+                    <button
+                      onClick={() => pastaPadrao.removerPasta()}
+                      className="rounded border border-ink-600 bg-ink-800 p-1 text-mist-500 hover:border-err-500 hover:text-err-400"
+                      title="Remover pasta padrão"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => pastaPadrao.definirPasta()}
+                className="flex w-full items-center justify-center gap-2 rounded border border-cyan-500/50 bg-cyan-500/10 px-3 py-2.5 font-display text-xs font-semibold text-cyan-300 transition-all hover:bg-cyan-500/20 hover:border-cyan-400"
+              >
+                <FolderPlus size={14} />
+                Definir Pasta Padrão
+              </button>
+            )}
           </div>
         </div>
 

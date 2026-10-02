@@ -15,6 +15,7 @@ import {
   Filter,
   FolderArchive,
   FolderCheck,
+  FolderCog,
   FolderOpen,
   FolderPlus,
   Info,
@@ -42,6 +43,7 @@ import {
   type ArquivoLoteInfo,
   type ArquivoSalvar,
 } from "../lib/fileSystem";
+import { usePastaPadrao } from "../hooks/usePastaPadrao";
 import { extrairDoPdf, validarDados } from "../lib/gemini";
 import { gerarNddPreenchido, baixarBlob } from "../lib/excel";
 import { formatarBytes } from "./UploadZones";
@@ -84,6 +86,7 @@ export default function MassProcessingPage({
   templateBuffer: templateBufferApp,
   log,
 }: Props) {
+  const pastaPadrao = usePastaPadrao();
   const [itens, setItens] = useState<ItemLote[]>([]);
   const [recursivo, setRecursivo] = useState(true);
   const [lendoPasta, setLendoPasta] = useState(false);
@@ -533,12 +536,19 @@ export default function MassProcessingPage({
       setExportando(true);
       setSucessoExportacao(null);
 
-      log("info", "Abrindo seletor para escolha da pasta de destino das NDDs…");
-      const dirHandle = await selecionarPastaSaida();
+      let dirHandle = await pastaPadrao.obterHandleComPermissao();
+      if (!dirHandle) {
+        log("info", "Abrindo seletor para escolha da pasta padrão de destino das NDDs…");
+        const definiu = await pastaPadrao.definirPasta();
+        if (!definiu) return;
+        dirHandle = await pastaPadrao.obterHandleComPermissao();
+      }
+
+      if (!dirHandle) return;
 
       const arquivos = await prepararListaNdds();
 
-      setProgressoExportacao({ atual: 0, total: arquivos.length, msg: "Gravando arquivos na pasta selecionada…" });
+      setProgressoExportacao({ atual: 0, total: arquivos.length, msg: "Criando subpastas e gravando planilhas na pasta selecionada…" });
 
       await salvarArquivosEmPasta(dirHandle, arquivos, (atual, total, nome) => {
         setProgressoExportacao({
@@ -548,8 +558,9 @@ export default function MassProcessingPage({
         });
       });
 
-      setSucessoExportacao({ total: arquivos.length, pasta: dirHandle.name });
-      log("ok", `Sucesso! ${arquivos.length} planilha(s) NDD gravada(s) diretamente na pasta "${dirHandle.name}".`);
+      const nomeDestino = pastaPadrao.nome || dirHandle.name;
+      setSucessoExportacao({ total: arquivos.length, pasta: nomeDestino });
+      log("ok", `Sucesso! ${arquivos.length} planilha(s) NDD gravada(s) em subpastas organizadas dentro de "${nomeDestino}".`);
     } catch (e: any) {
       if (e?.name !== "AbortError") {
         log("error", `Erro ao salvar NDDs na pasta: ${e?.message ?? e}`);
@@ -1147,12 +1158,41 @@ export default function MassProcessingPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {/* Widget Pasta Padrão (Marcado de azul na Imagem 2) */}
+            {pastaPadrao.nome ? (
+              <div className="flex items-center gap-2.5 rounded border border-cyan-500/40 bg-ink-850 px-3.5 py-2 text-xs shadow-sm">
+                <FolderCheck size={16} className="text-cyan-400 shrink-0" />
+                <div className="min-w-0">
+                  <div className="font-mono text-[9px] uppercase tracking-wider text-mist-400">Pasta padrão:</div>
+                  <div className="truncate font-mono text-xs font-semibold text-cyan-300 max-w-[140px] sm:max-w-[180px]" title={pastaPadrao.nome}>
+                    {pastaPadrao.nome}
+                  </div>
+                </div>
+                <button
+                  onClick={() => pastaPadrao.definirPasta()}
+                  className="ml-1 text-[11px] font-semibold text-mist-400 hover:text-cyan-300 underline"
+                  title="Alterar pasta padrão de saída"
+                >
+                  Alterar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => pastaPadrao.definirPasta()}
+                className="flex items-center gap-2 rounded border border-cyan-500/50 bg-cyan-500/10 px-3.5 py-2.5 font-display text-xs font-semibold text-cyan-300 transition-all hover:bg-cyan-500/20 hover:border-cyan-400"
+                title="Defina uma pasta padrão fixa para salvar as NDDs sem perguntar toda vez"
+              >
+                <FolderCog size={15} />
+                Definir Pasta Padrão
+              </button>
+            )}
+
             {/* Botão Secundário: ZIP */}
             <button
               onClick={aoBaixarZip}
               disabled={metricas.concluidos === 0 || exportando || executando}
               className="flex items-center gap-2 rounded border border-ink-500 bg-ink-800 px-4 py-2.5 font-display text-xs font-semibold text-mist-200 transition-all hover:border-cyan-400 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
-              title="Compactar todas as NDDs em um único arquivo .zip"
+              title="Compactar todas as NDDs em um único arquivo .zip (organizadas em subpastas)"
             >
               <FolderArchive size={15} />
               Baixar tudo em .ZIP
@@ -1165,7 +1205,11 @@ export default function MassProcessingPage({
               className="flex items-center gap-2 rounded bg-amber-500 px-5 py-2.5 font-display text-xs font-bold uppercase tracking-wider text-ink-950 shadow-[0_2px_14px_-2px_rgba(255,178,36,0.6)] transition-all hover:bg-amber-400 hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-40"
             >
               {exportando ? <Loader2 size={16} className="animate-spin" /> : <FolderCheck size={16} />}
-              {exportando ? "Gravando Planilhas…" : "Gerar NDDs em Pasta"}
+              {exportando
+                ? "Gravando Planilhas…"
+                : pastaPadrao.nome
+                ? `Gerar NDDs em Pasta (${pastaPadrao.nome})`
+                : "Gerar NDDs em Pasta"}
             </button>
           </div>
         </div>
