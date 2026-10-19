@@ -11,5 +11,12 @@ export default defineConfig({
     hmr: {
       port: 3000,
     },
+    proxy: {
+      "/api/qwen": {
+        target: "https://maas.qwencloudapi.com/compatible-mode/v1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/qwen/, ""),
+      },
+    },
   },
 });

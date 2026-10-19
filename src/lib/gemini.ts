@@ -1,7 +1,17 @@
-import type { AliasColuna, ArquivoInfo, DadosPPI, Equipamento, LogLevel } from "../types";
+import type { AliasColuna, ArquivoInfo, DadosPPI, Equipamento, LogLevel, ProvedorIA } from "../types";
+import { extrairDoPdfQwen } from "./qwen";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta";
 export const MODELO_FALLBACK_503 = "gemini-3.1-flash-lite";
+// Backups quando o modelo escolhido dá 503 persistente. Só modelos atuais: a família 2.x foi
+// descontinuada para novas contas (404 "no longer available to new users", jan/2026+), embora
+// ainda apareça na listagem da API. Modelo que der erro é pulado (ver laço da cascata).
+export const MODELOS_FALLBACK_CASCATA = [
+  "gemini-3.1-flash-lite",
+  "gemini-flash-lite-latest",
+  "gemini-3.5-flash",
+  "gemini-flash-latest",
+];
 export const MODELOS_PADRAO = [
   "gemini-3.5-flash-lite",
   "gemini-3.1-flash-lite",
@@ -235,6 +245,20 @@ function aplicarAliases(obj: any, aliases: AliasColuna[], log: Logger, equipInde
     aevcomca: "aev_com_ca",
     areadeexposicaocomarrasto: "aev_com_ca",
     areacomarrasto: "aev_com_ca",
+
+    // Citação obrigatória e página (Anti-Alucinação)
+    trechocitadodopdf: "trecho_citado_do_pdf",
+    trechocitado: "trecho_citado_do_pdf",
+    trechooriginal: "trecho_citado_do_pdf",
+    citacao: "trecho_citado_do_pdf",
+    trechopdf: "trecho_citado_do_pdf",
+    origemtrecho: "trecho_citado_do_pdf",
+    quote: "trecho_citado_do_pdf",
+    textocitado: "trecho_citado_do_pdf",
+    pagina: "pagina",
+    pag: "pagina",
+    page: "pagina",
+    folha: "pagina",
   };
 
   // 1. Processar chaves normalizadas
@@ -332,11 +356,61 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     return str.replace(".", ",");
   };
 
-  const equipamentos: Equipamento[] = eqBrutos.map((e, i) => {
+  const equipamentos: Equipamento[] = [];
+  const temAlgumaCitacaoNoLote = eqBrutos.some((e: any) => {
+    const rawQuote = e?.trecho_citado_do_pdf || e?.trecho_original || e?.trecho_citado || e?.citacao || "";
+    return typeof rawQuote === "string" && rawQuote.trim().length > 3;
+  });
+
+  for (let i = 0; i < eqBrutos.length; i++) {
+    const e = eqBrutos[i];
     const eComAliases = aplicarAliases(e, aliases, log, i);
 
     let tipoEquip = s(eComAliases?.tipo_equipamento).trim().toUpperCase();
     const modeloUpper = s(eComAliases?.modelo).toUpperCase().trim();
+    const trechoCitado = s(
+      eComAliases?.trecho_citado_do_pdf ||
+      e?.trecho_citado_do_pdf ||
+      eComAliases?.trecho_original ||
+      e?.trecho_original ||
+      e?.trecho_citado ||
+      e?.citacao ||
+      ""
+    ).trim();
+
+    const paginaRaw = eComAliases?.pagina ?? e?.pagina ?? 3;
+    let paginaNum: number | string = 3;
+    if (typeof paginaRaw === "number") {
+      paginaNum = paginaRaw;
+    } else {
+      const matchNum = String(paginaRaw).replace(/\D/g, "");
+      paginaNum = matchNum ? parseInt(matchNum, 10) : 3;
+    }
+
+    // 1. Verificação Anti-Alucinação:
+    // Se a linha é completamente vazia ou fantasma (sem tipo e sem modelo)
+    const semTipoNemModelo = (!tipoEquip || tipoEquip === "-") && (!eComAliases?.modelo || eComAliases?.modelo === "-");
+    if (semTipoNemModelo) {
+      log("warn", `[Anti-Alucinação] Linha #${i + 1} descartada: sem tipo nem modelo identificados.`);
+      continue;
+    }
+
+    // Se o modelo é claramente cabeçalho ou resumo da tabela
+    if (/^(TIPO|MODELO|ANTENA|CARREGAMENTO|TOTAL|RESUMO)/i.test(modeloUpper)) {
+      log("warn", `[Anti-Alucinação] Linha #${i + 1} ("${eComAliases?.modelo}") descartada por ser cabeçalho ou resumo da tabela.`);
+      continue;
+    }
+
+    // Se o lote contém citações obrigatórias mas este item NÃO tem citação ou tem citação nula/inválida
+    const citacaoInvalida = /^(não|nao|nenhum|n\/a|null|undefined|vazio|-)$/i.test(trechoCitado);
+    if (temAlgumaCitacaoNoLote && (!trechoCitado || citacaoInvalida)) {
+      log("warn", `[Anti-Alucinação] Equipamento #${i + 1} ("${eComAliases?.modelo || tipoEquip}") DESCARTADO: modelo não comprovou o item com trecho literal do PDF.`);
+      continue;
+    }
+
+    if (trechoCitado) {
+      log("ok", `[Anti-Alucinação] Equipamento #${i + 1} ("${eComAliases?.modelo || tipoEquip}") comprovado no PDF (Pág. ${paginaNum}): "${trechoCitado.slice(0, 60)}${trechoCitado.length > 60 ? "…" : ""}"`);
+    }
 
     // Normalização apenas para variações de grafia de Micro-ondas / Parábola:
     if (["MICROONDAS", "MICRO-ONDAS", "MICRO ONDAS", "PARABOLA", "PARABÓLICA"].includes(tipoEquip)) {
@@ -380,6 +454,8 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
       aev_sem_ca: sVirgula(eComAliases?.aev_sem_ca),
       ca: sVirgula(eComAliases?.ca) || "-",
       aev_com_ca: sVirgula(eComAliases?.aev_com_ca),
+      trecho_citado_do_pdf: trechoCitado,
+      pagina: paginaNum,
     };
 
     // 1. Se comprimento contiver string com múltiplos valores (ex: "2500 x 355 x 192" ou "1400x320x145"):
@@ -489,11 +565,74 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
       }
     }
 
-    if (!eq.tipo_equipamento && !eq.modelo) {
-      log("warn", `Equipamento #${i + 1} veio sem tipo e sem modelo — pode ser linha de resumo da tabela.`);
-    }
-    return eq;
-  });
+    equipamentos.push(eq);
+  }
+
+  // 1. Extração e validação Anti-Alucinação da Localização (Carimbo):
+  const trechoLocalizacao = s(
+    bruto?.trecho_citado_localizacao ||
+    bruto?.trecho_citado_endereco ||
+    bruto?.trecho_carimbo ||
+    bruto?.rastreabilidade?.origem_localizacao ||
+    bruto?.origem_localizacao ||
+    ""
+  ).trim();
+
+  let pagLocalizacao: number | string = bruto?.pagina_localizacao ?? 1;
+  if (typeof pagLocalizacao === "string") {
+    const num = parseInt(pagLocalizacao.replace(/\D/g, ""), 10);
+    pagLocalizacao = !isNaN(num) && num > 0 ? num : 1;
+  }
+
+  if (trechoLocalizacao && !/^(não|nao|nenhum|n\/a|null|undefined|-)$/i.test(trechoLocalizacao)) {
+    log("ok", `[Anti-Alucinação] Localização comprovada no carimbo (Pág. ${pagLocalizacao}): "${trechoLocalizacao.slice(0, 70)}${trechoLocalizacao.length > 70 ? "…" : ""}"`);
+  }
+
+  // 2. Extração e validação Anti-Alucinação da Base de Concreto (Legenda Civil):
+  const trechoBase = s(
+    bruto?.trecho_citado_base ||
+    bruto?.trecho_citado_base_concreto ||
+    bruto?.trecho_base ||
+    bruto?.rastreabilidade?.base_em_concreto ||
+    bruto?.origem_base ||
+    ""
+  ).trim();
+
+  let pagBase: number | string = bruto?.pagina_base ?? 2;
+  if (typeof pagBase === "string") {
+    const num = parseInt(pagBase.replace(/\D/g, ""), 10);
+    pagBase = !isNaN(num) && num > 0 ? num : 2;
+  }
+
+  let nxBaseFinal = s(bruto.nx_base);
+  let diBaseFinal = s(bruto.di_base);
+
+  // Verificação Anti-Alucinação para Base de Concreto:
+  // Se o LLM preencheu di_base ou nx_base, mas:
+  // a) O trecho citado está vazio ou diz "nenhum" / "N/A"
+  // b) O trecho citado menciona termos proibidos (haste de aterramento, gradil, projeção futura) e NÃO menciona base/concreto
+  const baseSemCitacao = !trechoBase || /^(não|nao|nenhum|n\/a|null|undefined|inexistente|-)$/i.test(trechoBase);
+  const baseAlucinadaDeOutrosElementos = (
+    /haste|aterramento|gradil|cerca|expans[aã]o|recuo/i.test(trechoBase) &&
+    !/base.*concreto|base.*implant|base.*equipamento/i.test(trechoBase)
+  );
+
+  if ((diBaseFinal || nxBaseFinal) && (baseSemCitacao || baseAlucinadaDeOutrosElementos)) {
+    const motivo = baseAlucinadaDeOutrosElementos
+      ? `o trecho citado refere-se a aterramento/gradil/expansão ("${trechoBase}") e não à base civil`
+      : "nenhum trecho da legenda civil comprovou base a implantar";
+    log("warn", `[Anti-Alucinação] Base de concreto descartada (${diBaseFinal || "nx=" + nxBaseFinal}): ${motivo}.`);
+    diBaseFinal = "";
+    nxBaseFinal = "";
+  } else if (trechoBase && !baseSemCitacao) {
+    log("ok", `[Anti-Alucinação] Base de concreto comprovada na legenda civil (Pág. ${pagBase}): "${trechoBase.slice(0, 70)}${trechoBase.length > 70 ? "…" : ""}"`);
+  }
+
+  // Formato é convertido aqui, no código (regra de 14/10/2026): a IA pode devolver a coordenada como
+  // está no carimbo (graus/min/seg) ou a altura como "40,00m"; o valor vale, o formato a gente ajusta.
+  const latitudeFinal = normalizarCoordenada(s(bruto.latitude), "lat", log);
+  const longitudeFinal = normalizarCoordenada(s(bruto.longitude), "lon", log);
+  const alturaFinal = normalizarAltura(s(bruto.altura_ev), log);
 
   const dados: DadosPPI = {
     site_id_cliente: s(bruto.site_id_cliente),
@@ -505,11 +644,15 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
     cidade: s(bruto.cidade),
     cep: s(bruto.cep),
     uf: s(bruto.uf).toUpperCase().slice(0, 2),
-    latitude: s(bruto.latitude),
-    longitude: s(bruto.longitude),
-    altura_ev: s(bruto.altura_ev) || "60",
-    nx_base: s(bruto.nx_base),
-    di_base: s(bruto.di_base),
+    latitude: latitudeFinal,
+    longitude: longitudeFinal,
+    altura_ev: alturaFinal || "60",
+    nx_base: nxBaseFinal,
+    di_base: diBaseFinal,
+    trecho_citado_localizacao: trechoLocalizacao,
+    pagina_localizacao: pagLocalizacao,
+    trecho_citado_base: trechoBase,
+    pagina_base: pagBase,
     rastreabilidade: {
       ...(typeof bruto?.rastreabilidade === "object" && bruto.rastreabilidade !== null ? bruto.rastreabilidade : {}),
       origem_site_id: s(bruto?.rastreabilidade?.origem_site_id),
@@ -523,6 +666,7 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
   const FIXOS = new Set([
     "site_id_cliente", "site_id_detentor", "data_rfi", "data_emissao", "endereco", "bairro", "cidade", "cep", "uf",
     "latitude", "longitude", "altura_ev", "nx_base", "di_base", "rastreabilidade", "equipamentos",
+    "trecho_citado_localizacao", "pagina_localizacao", "trecho_citado_base", "pagina_base",
   ]);
   const extras: Record<string, string> = {};
   Object.keys(bruto ?? {}).forEach((k) => {
@@ -544,6 +688,60 @@ export function normalizarDados(bruto: any, log: Logger, aliases: AliasColuna[] 
 }
 
 /** Checa consistência dos dados e devolve avisos (não bloqueia nada). */
+/**
+ * Coordenada em grau decimal com 6 casas ("-21.613889"), a partir do que a IA devolveu:
+ *  - grau decimal, com ou sem símbolo solto: "-21.613889", "-20.438181\"", "-20.646739°", "21.6139 S"
+ *  - graus/min/seg ou graus/min decimais: "-21°36'50.00\"S", "53°24'0.81\"W", "21°36.83'S"
+ * S, W ou O (oeste) deixam negativo. Longitude no Brasil é sempre oeste: positiva sem letra vira negativa.
+ * Latitude sem sinal nem letra é mantida (há sites no hemisfério norte) e gera aviso no log.
+ * Se não reconhecer o formato, devolve o texto original (validarDados avisa).
+ */
+export function normalizarCoordenada(valor: string, eixo: "lat" | "lon", log?: Logger): string {
+  const original = (valor ?? "").trim();
+  if (!original) return "";
+  const t = original.replace(/,/g, ".").replace(/[′’`´]/g, "'").replace(/[″”“]/g, '"').replace(/º/g, "°");
+  let graus: number | null = null;
+  let negativo = false;
+  let temHemisferio = false;
+
+  const dms = t.match(/^\s*([+-])?\s*(\d{1,3})\s*°\s*(\d{1,2}(?:\.\d+)?)\s*'?\s*(?:(\d{1,2}(?:\.\d+)?)\s*(?:"|'')?)?\s*([NSEWOL])?\s*$/i);
+  const dec = t.match(/^\s*([+-])?\s*(\d{1,3}(?:\.\d+)?)\s*°?\s*(?:"|'{1,2})?\s*([NSEWOL])?\s*(?:"|'{1,2})?\s*$/i);
+  if (dms) {
+    graus = Number(dms[2]) + Number(dms[3]) / 60 + (dms[4] ? Number(dms[4]) / 3600 : 0);
+    negativo = dms[1] === "-";
+    if (dms[5]) { temHemisferio = true; negativo = negativo || /[SWO]/i.test(dms[5]); }
+  } else if (dec) {
+    graus = Number(dec[2]);
+    negativo = dec[1] === "-";
+    if (dec[3]) { temHemisferio = true; negativo = negativo || /[SWO]/i.test(dec[3]); }
+  }
+  if (graus === null || !Number.isFinite(graus) || graus > (eixo === "lat" ? 90 : 180)) {
+    log?.("warn", `${eixo === "lat" ? "Latitude" : "Longitude"} "${original}" em formato não reconhecido — mantida como veio.`);
+    return original;
+  }
+  if (!negativo && !temHemisferio && eixo === "lon") {
+    negativo = true; // Brasil inteiro fica a oeste de Greenwich
+    log?.("warn", `Longitude "${original}" sem sinal nem W: considerada oeste (negativa), como em todo o Brasil.`);
+  }
+  if (!negativo && !temHemisferio && eixo === "lat" && /°/.test(t)) {
+    log?.("warn", `Latitude "${original}" sem sinal nem S/N: mantida positiva (norte). Confira no carimbo.`);
+  }
+  const final = ((negativo ? -1 : 1) * graus).toFixed(6);
+  if (final !== original) log?.("info", `${eixo === "lat" ? "Latitude" : "Longitude"} convertida: "${original}" → ${final}`);
+  return final;
+}
+
+/** Altura da EV só com o número: "40,00m" / "60.0" / "60 m" → "40" / "60"; "40,5" fica "40,5". */
+export function normalizarAltura(valor: string, log?: Logger): string {
+  const original = (valor ?? "").trim();
+  const m = original.match(/^(\d+(?:[.,]\d+)?)\s*(?:m|metros?)?\.?$/i);
+  if (!m) return original;
+  const n = Number(m[1].replace(",", "."));
+  const final = Number.isInteger(n) ? String(n) : m[1].replace(".", ",");
+  if (final !== original) log?.("info", `Altura da EV ajustada: "${original}" → "${final}"`);
+  return final;
+}
+
 export function validarDados(d: DadosPPI): string[] {
   const avisos: string[] = [];
   if (!d.site_id_cliente && !d.site_id_detentor) avisos.push("Nenhum Site ID encontrado — confira o carimbo 'SITE:' no PDF.");
@@ -555,6 +753,16 @@ export function validarDados(d: DadosPPI): string[] {
     const aev = String(eq.aev_sem_ca);
     if (aev && !/^\d+([.,]\d+)?$/.test(aev)) avisos.push(`Equip #${i + 1}: AEV s/CA "${aev}" não é numérico.`);
   });
+  const semCitacao = d.equipamentos.filter((eq) => !eq.trecho_citado_do_pdf);
+  if (semCitacao.length > 0 && d.equipamentos.length > semCitacao.length) {
+    avisos.push(`${semCitacao.length} equipamento(s) sem citação literal do PDF — confira a página 3.`);
+  }
+  if (d.di_base && !d.trecho_citado_base) {
+    avisos.push(`Base de concreto (${d.di_base}) sem citação comprobatória da legenda civil.`);
+  }
+  if ((d.endereco || d.latitude) && !d.trecho_citado_localizacao) {
+    avisos.push("Localização sem citação literal do carimbo.");
+  }
   if (d.equipamentos.length === 0) avisos.push("Nenhum equipamento extraído — a tabela da página 3 pode estar em outro formato.");
   return avisos;
 }
@@ -582,15 +790,59 @@ async function postGemini(url: string, payload: object, log: Logger): Promise<{ 
   }
 }
 
+export interface OpcoesFallbackIA {
+  provedor?: ProvedorIA;
+  qwenApiKey?: string;
+  qwenModelo?: string;
+  qwenBaseUrl?: string;
+  fallbackAtivo?: boolean;
+  /** responseSchema do Gemini (montarSchemaResposta). Só enviado com o modo "Schema" ligado. Ignorado pelo QwenCloud. */
+  responseSchema?: Record<string, unknown>;
+}
+
 export async function extrairDoPdf(
   apiKey: string,
   modelo: string,
   arquivo: ArquivoInfo,
   prompt: string,
   aliases: AliasColuna[],
-  log: Logger
+  log: Logger,
+  opcoesFallback?: OpcoesFallbackIA
 ): Promise<ResultadoGemini> {
   const chaveLimpa = (apiKey || "").trim();
+  const qwenChaveLimpa = (opcoesFallback?.qwenApiKey || "").trim();
+  const usarQwenDireto = opcoesFallback?.provedor === "qwen";
+
+  // Se o provedor configurado for o QwenCloud diretamente:
+  if (usarQwenDireto) {
+    if (!qwenChaveLimpa) {
+      throw new Error(
+        "Chave da API QwenCloud não configurada. Clique em 'Configurar API' e insira sua chave sk-…"
+      );
+    }
+    try {
+      return await extrairDoPdfQwen(
+        qwenChaveLimpa,
+        opcoesFallback?.qwenModelo || "qwen3.8-flash",
+        arquivo,
+        prompt,
+        aliases,
+        log,
+        opcoesFallback?.qwenBaseUrl
+      );
+    } catch (errQwen: any) {
+      if (chaveLimpa && opcoesFallback?.fallbackAtivo !== false) {
+        log(
+          "warn",
+          `[Fallback IA] Falha no QwenCloud (${errQwen.message}). Ativando fallback automático para o Google Gemini (${modelo})…`
+        );
+      } else {
+        throw errQwen;
+      }
+    }
+  }
+
+  // Execução via Google Gemini (com cascata de modelos e fallback para Qwen se necessário)
   if (!chaveLimpa) {
     throw new Error("Chave de API do Gemini não configurada. Clique em 'Configurar API' e insira sua chave do Google AI Studio.");
   }
@@ -607,8 +859,18 @@ export async function extrairDoPdf(
         parts: [{ text: prompt }, { inline_data: { mime_type: arquivo.mime, data: arquivo.base64 } }],
       },
     ],
-    generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
+    // responseMimeType: o Gemini devolve JSON puro e válido (sem crases ```json nem texto em volta)
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+      // responseSchema: campos fixos — o Gemini só devolve as chaves e tipos declarados
+      ...(opcoesFallback?.responseSchema ? { responseSchema: opcoesFallback.responseSchema } : {}),
+    },
   };
+  log("info", opcoesFallback?.responseSchema
+    ? "Modo de resposta: SCHEMA (campos fixos, citação antes do valor)."
+    : "Modo de resposta: LIVRE (JSON sem schema).");
 
   const rawRequest = JSON.stringify(
     { ...payload, contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: arquivo.mime, data: `«base64 omitido — ${(arquivo.base64.length / 1024).toFixed(0)}KB»` } }] }] },
@@ -635,7 +897,7 @@ export async function extrairDoPdf(
       const r = await postGemini(url, payload, log);
       if (r.status === 503) {
         if (tentativa < MAX_TENTATIVAS_503) {
-          const espera = 4000 * tentativa;
+          const espera = 3000 * tentativa;
           log("warn", `503 (sobrecarga em ${mod}). Aguardando ${espera / 1000}s antes de repetir (${tentativa}/${MAX_TENTATIVAS_503})…`);
           await dormir(espera);
           continue;
@@ -657,27 +919,76 @@ export async function extrairDoPdf(
     return false;
   };
 
-  const sucessoPrimario = await tentarComModelo(modeloAtual, false);
-
-  if (!sucessoPrimario) {
-    if (modeloAtual !== MODELO_FALLBACK_503) {
+  let sucessoPrimario = false;
+  try {
+    sucessoPrimario = await tentarComModelo(modeloAtual, false);
+  } catch (errPrimario: any) {
+    const msgBaixa = String(errPrimario?.message || "").toLowerCase();
+    if (
+      (msgBaixa.includes("429") || msgBaixa.includes("cota") || msgBaixa.includes("quota")) &&
+      qwenChaveLimpa &&
+      opcoesFallback?.fallbackAtivo !== false
+    ) {
       log(
         "warn",
-        `Erro 503 ocorreu mais de 3 vezes no modelo "${modeloAtual}". Ativando fallback automático para "${MODELO_FALLBACK_503}"…`
+        `[Fallback IA] Limite de cota atingido no Gemini (429). Ativando fallback automático para QwenCloud (${opcoesFallback?.qwenModelo || "qwen3.8-flash"})…`
       );
-      modeloAtual = MODELO_FALLBACK_503;
-      const sucessoFallback = await tentarComModelo(modeloAtual, true);
-      if (!sucessoFallback) {
-        const msg = `O modelo primário (${modelo}) e o fallback (${MODELO_FALLBACK_503}) estão sobrecarregados (503 persistente). Aguarde 1 minuto ou selecione outro modelo (ex: gemini-2.5-flash).`;
-        log("error", msg);
-        throw new Error(msg);
+      return await extrairDoPdfQwen(
+        qwenChaveLimpa,
+        opcoesFallback?.qwenModelo || "qwen3.8-flash",
+        arquivo,
+        prompt,
+        aliases,
+        log,
+        opcoesFallback?.qwenBaseUrl
+      );
+    }
+    throw errPrimario;
+  }
+
+  if (!sucessoPrimario) {
+    let sucessoCascata = false;
+    const modelosCascata = MODELOS_FALLBACK_CASCATA.filter(
+      (m) => normalizarNomeModelo(m) !== modeloAtual
+    );
+
+    for (const modFb of modelosCascata) {
+      log("warn", `Erro 503 persistiu em "${modeloAtual}". Acionando modelo da cascata do Gemini: "${modFb}"…`);
+      modeloAtual = modFb;
+      try {
+        sucessoCascata = await tentarComModelo(modeloAtual, true);
+      } catch (errFb: any) {
+        // Modelo de backup indisponível (ex.: 404 de modelo descontinuado): tenta o próximo da cascata
+        // em vez de abortar a extração — o modelo principal só falhou por sobrecarga (503).
+        log("warn", `Modelo de backup "${modFb}" indisponível (${String(errFb?.message ?? errFb).slice(0, 120)}). Tentando o próximo…`);
+        sucessoCascata = false;
       }
-    } else {
-      const msg = `O modelo ${modeloAtual} está temporariamente sobrecarregado (erro 503 persistente após ${MAX_TENTATIVAS_503} tentativas). Aguarde alguns instantes e tente novamente.`;
+      if (sucessoCascata) break;
+    }
+
+    if (!sucessoCascata) {
+      if (qwenChaveLimpa && opcoesFallback?.fallbackAtivo !== false) {
+        log(
+          "warn",
+          `[Fallback IA] Todos os modelos Gemini estão sobrecarregados (503). Ativando fallback automático para QwenCloud (${opcoesFallback?.qwenModelo || "qwen3.8-flash"})…`
+        );
+        return await extrairDoPdfQwen(
+          qwenChaveLimpa,
+          opcoesFallback?.qwenModelo || "qwen3.8-flash",
+          arquivo,
+          prompt,
+          aliases,
+          log,
+          opcoesFallback?.qwenBaseUrl
+        );
+      }
+
+      const msg = `O modelo ${modelo} e os modelos de backup do Gemini estão sobrecarregados (503 persistente). Configure uma chave QwenCloud para fallback automático ou tente novamente mais tarde.`;
       log("error", msg);
       throw new Error(msg);
     }
   }
+
 
   let textoIA = "";
   try {
@@ -686,13 +997,17 @@ export async function extrairDoPdf(
     if (promptFeedback) throw new Error(`Conteúdo bloqueado pelo filtro de segurança do Gemini: ${promptFeedback}.`);
     const cand = respJson?.candidates?.[0];
     if (!cand) throw new Error("Resposta sem 'candidates' — abra a aba 'Resposta bruta' para ver o que voltou.");
-    if (cand.finishReason && cand.finishReason !== "STOP" && cand.finishReason !== "MAX_TOKENS") {
+    // MAX_TOKENS = a resposta foi cortada no limite de tamanho: o JSON veio incompleto (equipamentos faltando)
+    if (cand.finishReason === "MAX_TOKENS") {
+      throw new Error("A resposta da IA foi cortada no limite de tamanho (MAX_TOKENS) — o JSON veio incompleto e equipamentos poderiam ficar de fora. Tente novamente ou use outro modelo.");
+    }
+    if (cand.finishReason && cand.finishReason !== "STOP") {
       log("warn", `finishReason: ${cand.finishReason}`);
     }
     textoIA = cand?.content?.parts?.map((p: any) => p?.text ?? "").join("") ?? "";
     if (!textoIA.trim()) throw new Error("A IA retornou texto vazio.");
   } catch (e: any) {
-    if (e?.message?.startsWith("Conteúdo") || e?.message?.startsWith("Resposta") || e?.message?.startsWith("A IA")) throw e;
+    if (e?.message?.startsWith("Conteúdo") || e?.message?.startsWith("Resposta") || e?.message?.startsWith("A IA") || e?.message?.startsWith("A resposta da IA")) throw e;
     throw new Error("Não foi possível ler o envelope da resposta do Gemini. Veja a aba 'Resposta bruta'.");
   }
 

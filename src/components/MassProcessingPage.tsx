@@ -32,7 +32,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import type { ConfigAutomacao, DadosPPI, Equipamento, LogLevel, TemplateInfo, TipoProjeto } from "../types";
+import type { ConfigAutomacao, DadosPPI, Equipamento, LogLevel, ProvedorIA, TemplateInfo, TipoProjeto } from "../types";
 import {
   selecionarPastaEntrada,
   selecionarPastaSaida,
@@ -45,6 +45,7 @@ import {
 } from "../lib/fileSystem";
 import { usePastaPadrao } from "../hooks/usePastaPadrao";
 import { extrairDoPdf, validarDados } from "../lib/gemini";
+import { montarSchemaResposta } from "../lib/mapping";
 import { gerarNddPreenchido, baixarBlob } from "../lib/excel";
 import { formatarBytes } from "./UploadZones";
 
@@ -72,6 +73,11 @@ interface Props {
   promptFinal: string;
   templateBuffer: ArrayBuffer | null;
   log: (level: LogLevel, msg: string, detalhe?: string) => void;
+  provedor?: ProvedorIA;
+  qwenApiKey?: string;
+  qwenModelo?: string;
+  qwenBaseUrl?: string;
+  fallbackAtivo?: boolean;
 }
 
 const INTERVALO_RATE_LIMIT_MS = 4500; // ~13 RPM — margem de segurança estrita para cota gratuita
@@ -85,6 +91,11 @@ export default function MassProcessingPage({
   promptFinal,
   templateBuffer: templateBufferApp,
   log,
+  provedor = "gemini",
+  qwenApiKey = "",
+  qwenModelo = "qwen3.8-flash",
+  qwenBaseUrl = "",
+  fallbackAtivo = true,
 }: Props) {
   const pastaPadrao = usePastaPadrao();
   const [itens, setItens] = useState<ItemLote[]>([]);
@@ -246,8 +257,9 @@ export default function MassProcessingPage({
 
   const iniciarProcessamentoLote = async (apenasErros = false) => {
     const chaveLimpa = (apiKey || "").trim();
-    if (!chaveLimpa) {
-      log("error", "Chave da API Gemini não configurada. Configure a API no topo da página antes de iniciar.");
+    const qwenChaveLimpa = (qwenApiKey || "").trim();
+    if (!chaveLimpa && !qwenChaveLimpa) {
+      log("error", "Nenhuma chave de API configurada (Gemini ou QwenCloud). Configure a API no topo da página antes de iniciar.");
       return;
     }
 
@@ -292,14 +304,23 @@ export default function MassProcessingPage({
           log("info", `[${idx + 1}/${fila.length}] Lendo PDF "${item.nome}"…`);
           const { base64, mime } = await lerArquivoComoBase64(item.file);
 
-          log("info", `[${idx + 1}/${fila.length}] Enviando requisição ao Gemini (${modelo})…`);
+          const iaNome = provedor === "qwen" ? `QwenCloud (${qwenModelo})` : `Gemini (${modelo})`;
+          log("info", `[${idx + 1}/${fila.length}] Enviando requisição para ${iaNome}…`);
           const resultado = await extrairDoPdf(
             chaveLimpa,
             modelo,
             { nome: item.nome, tamanho: item.tamanho, mime, base64 },
             promptFinal,
             cfg.aliasesColunas ?? [],
-            log
+            log,
+            {
+              provedor,
+              qwenApiKey,
+              qwenModelo,
+              qwenBaseUrl,
+              fallbackAtivo,
+              responseSchema: cfg.usarSchema ? montarSchemaResposta(cfg) : undefined,
+            }
           );
 
           const avisosValidacao = validarDados(resultado.dados);
@@ -397,8 +418,9 @@ export default function MassProcessingPage({
     if (!item || executando) return;
 
     const chaveLimpa = (apiKey || "").trim();
-    if (!chaveLimpa) {
-      log("error", "Chave da API Gemini não configurada.");
+    const qwenChaveLimpa = (qwenApiKey || "").trim();
+    if (!chaveLimpa && !qwenChaveLimpa) {
+      log("error", "Nenhuma chave de API configurada (Gemini ou QwenCloud).");
       return;
     }
 
@@ -415,7 +437,15 @@ export default function MassProcessingPage({
         { nome: item.nome, tamanho: item.tamanho, mime, base64 },
         promptFinal,
         cfg.aliasesColunas ?? [],
-        log
+        log,
+        {
+          provedor,
+          qwenApiKey,
+          qwenModelo,
+          qwenBaseUrl,
+          fallbackAtivo,
+          responseSchema: cfg.usarSchema ? montarSchemaResposta(cfg) : undefined,
+        }
       );
       const avisos = validarDados(resultado.dados);
       const status = avisos.length > 0 ? "aviso" : "sucesso";
@@ -1410,6 +1440,18 @@ function ModalInspecaoItem({ item, onSalvar, onFechar }: ModalProps) {
                 />
               </div>
 
+              {dadosLocais.trecho_citado_localizacao && (
+                <div
+                  className="sm:col-span-2 flex items-center gap-1.5 rounded bg-cyan-950/60 border border-cyan-800/50 px-2.5 py-1 text-[10px] text-cyan-300 font-mono"
+                  title={`Trecho citado do carimbo (Pág. ${dadosLocais.pagina_localizacao ?? 1}):\n"${dadosLocais.trecho_citado_localizacao}"`}
+                >
+                  <span className="rounded bg-cyan-900/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-cyan-200 shrink-0">
+                    Carimbo Pág. {dadosLocais.pagina_localizacao ?? 1}
+                  </span>
+                  <span className="truncate italic text-mist-300">"{dadosLocais.trecho_citado_localizacao}"</span>
+                </div>
+              )}
+
               <div className="sm:col-span-2">
                 <label className="mb-1 block font-mono text-[10px] uppercase text-mist-500">
                   Endereço
@@ -1489,6 +1531,42 @@ function ModalInspecaoItem({ item, onSalvar, onFechar }: ModalProps) {
                   className="field-input font-mono text-xs"
                 />
               </div>
+              <div>
+                <label className="mb-1 block font-mono text-[10px] uppercase text-mist-500">
+                  Dimensões da Base (K46)
+                </label>
+                <input
+                  type="text"
+                  value={dadosLocais.di_base ?? ""}
+                  onChange={(e) => aoMudarCampo("di_base", e.target.value)}
+                  placeholder="ex: 1,00x1,00"
+                  className="field-input font-mono text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block font-mono text-[10px] uppercase text-mist-500">
+                  Qtd Bases (nx_base)
+                </label>
+                <input
+                  type="text"
+                  value={dadosLocais.nx_base ?? ""}
+                  onChange={(e) => aoMudarCampo("nx_base", e.target.value)}
+                  placeholder="ex: 1 ou 2"
+                  className="field-input font-mono text-xs"
+                />
+              </div>
+
+              {dadosLocais.trecho_citado_base && (
+                <div
+                  className="sm:col-span-2 flex items-center gap-1.5 rounded bg-amber-950/40 border border-amber-800/40 px-2.5 py-1 text-[10px] text-amber-300 font-mono"
+                  title={`Trecho citado da legenda civil (Pág. ${dadosLocais.pagina_base ?? 2}):\n"${dadosLocais.trecho_citado_base}"`}
+                >
+                  <span className="rounded bg-amber-900/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-amber-200 shrink-0">
+                    Legenda Civil Pág. {dadosLocais.pagina_base ?? 2}
+                  </span>
+                  <span className="truncate italic text-mist-300">"{dadosLocais.trecho_citado_base}"</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1543,6 +1621,17 @@ function ModalInspecaoItem({ item, onSalvar, onFechar }: ModalProps) {
                           onChange={(e) => aoMudarEquipamento(i, "modelo", e.target.value)}
                           className="w-full rounded bg-ink-900 px-1.5 py-1 text-mist-100 border border-ink-700"
                         />
+                        {eq.trecho_citado_do_pdf && (
+                          <div
+                            className="mt-0.5 flex items-center gap-1 font-mono text-[9px] text-cyan-400/90 truncate max-w-[190px]"
+                            title={`Comprovação Anti-Alucinação (Pág. ${eq.pagina || 3}):\n"${eq.trecho_citado_do_pdf}"`}
+                          >
+                            <span className="rounded bg-cyan-950/80 border border-cyan-800/60 px-1 text-[8px] text-cyan-300 font-semibold shrink-0">
+                              Pág. {eq.pagina || 3}
+                            </span>
+                            <span className="truncate italic text-mist-400">"{eq.trecho_citado_do_pdf}"</span>
+                          </div>
+                        )}
                       </td>
                       <td className="p-1.5">
                         <input

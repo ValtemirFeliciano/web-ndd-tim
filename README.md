@@ -139,6 +139,27 @@ Tudo é salvo automaticamente no navegador (auto-save). Os **campos personalizad
 
 ---
 
+## 🖥️ CLI (uso sem navegador — robô fly_automation)
+
+O mesmo pipeline do app (`extrairDoPdf` → `normalizarDados` → `validarDados` → `gerarNddPreenchido`) roda pela linha de comando.
+É assim que o robô **fly_automation** gera a NDD da TIM. Ele não tem regra de NDD própria: **o que mudar aqui vale para o robô** depois de rodar `atualizar_ndd_forge.bat` lá.
+
+```bash
+npm run build:cli      # gera dist-cli/ndd-forge-cli.mjs (bundle único, só precisa do Node) + templates + VERSAO.json
+GEMINI_API_KEY=... node dist-cli/ndd-forge-cli.mjs --pdf PPI.pdf --saida pasta --tipo bts --modo schema --data-rfi 30/09/2026
+```
+
+- Chave **só por variável de ambiente** (`GEMINI_API_KEY`; opcionais `GEMINI_MODEL`, `QWEN_API_KEY`).
+- Saída:
+  - stderr: log do pipeline;
+  - stdout: **1 linha JSON** `{ok, arquivo, avisos, dados, modelo, versao}`;
+  - exit: `0` ok · `1` argumentos · `2` IA · `3` Excel.
+- `--modo livre|schema` = seletor LIVRE/SCHEMA do app (padrão `livre`). O robô fly_automation usa `schema`.
+- Usa a **configuração de fábrica** (`CONFIG_PADRAO`). Personalizações feitas na página "Mapeamento & Prompt" ficam no `localStorage` do navegador e **não** valem no CLI. Para valerem no robô, coloque-as no código (`mapping.ts`).
+- O código fica em `src/cli/` e está fora do `tsconfig` do app (o app só tem tipos de navegador); quem compila é o esbuild (`scripts/build-cli.mjs`).
+
+---
+
 ## 🛠️ Stack
 
 | Camada     | Tecnologia                          |

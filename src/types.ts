@@ -13,6 +13,10 @@ export interface Equipamento {
   aev_sem_ca: string;
   ca: string;
   aev_com_ca: string;
+  /** Trecho literal copiado do PDF para comprovação anti-alucinação */
+  trecho_citado_do_pdf?: string;
+  /** Número da página do PDF de onde o equipamento foi extraído */
+  pagina?: number | string;
 }
 
 /** Mapeamento de aliases para colunas da tabela de equipamentos */
@@ -52,6 +56,14 @@ export interface DadosPPI {
   nx_base?: string;
   /** Dimensões da base (ex: "1,00x1,00") */
   di_base?: string;
+  /** Trecho literal copiado do carimbo para comprovação anti-alucinação da localização */
+  trecho_citado_localizacao?: string;
+  /** Página de onde a localização/endereço foi extraído */
+  pagina_localizacao?: number | string;
+  /** Trecho literal da legenda civil que comprova a base de concreto */
+  trecho_citado_base?: string;
+  /** Página da planta civil de onde a base foi extraída */
+  pagina_base?: number | string;
   /** Campos personalizados adicionados pelo usuário na página de Configuração */
   extras?: Record<string, string>;
 }
@@ -72,11 +84,24 @@ export interface CampoMapeamento {
 }
 
 export type TipoProjeto = "bts" | "collo";
+export type ProvedorIA = "gemini" | "qwen";
+
+export interface ConfigIA {
+  provedor: ProvedorIA;
+  apiKey: string;
+  modelo: string;
+  qwenApiKey?: string;
+  qwenModelo?: string;
+  qwenBaseUrl?: string;
+  fallbackAtivo?: boolean;
+}
 
 /** Tudo o que o usuário personaliza na página de Configuração. */
 export interface ConfigAutomacao {
   /** Tipo de projeto ativo ("bts" | "collo") */
   tipoProjeto?: TipoProjeto;
+  /** true = envia o responseSchema ao Gemini (campos fixos); false = só JSON livre (comportamento anterior) */
+  usarSchema?: boolean;
   /** Instruções específicas para BTS */
   instrucoesBts?: string;
   /** Instruções específicas para COLLO */
@@ -137,6 +162,8 @@ export const EQUIPAMENTO_VAZIO: Equipamento = {
   aev_sem_ca: "",
   ca: "1,2",
   aev_com_ca: "",
+  trecho_citado_do_pdf: "",
+  pagina: 3,
 };
 
 export const DADOS_VAZIOS: DadosPPI = {
@@ -158,6 +185,10 @@ export const DADOS_VAZIOS: DadosPPI = {
     origem_equipamentos: "",
   },
   equipamentos: [],
+  trecho_citado_localizacao: "",
+  pagina_localizacao: 1,
+  trecho_citado_base: "",
+  pagina_base: 2,
 };
 
 /** Campos principais usados no medidor de preenchimento */

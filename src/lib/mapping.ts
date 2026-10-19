@@ -10,8 +10,8 @@ const LS_KEY = "nddforge.automacao.v1";
 
 /** Dicas de extração dos campos padrão — entram no prompt montado. */
 export const DESCRICOES_CAMPOS: Record<string, string> = {
-  site_id_cliente: '2ª linha do carimbo "SITE:" (ex: SN-RRRSI4)',
-  site_id_detentor: '1ª linha do carimbo "SITE:" (ex: MSRBS006_A)',
+  site_id_cliente: '2ª linha do carimbo "SITE:" (ex: SN-XXXXX0)',
+  site_id_detentor: '1ª linha do carimbo "SITE:" (ex: XXXXX000_A)',
   data_emissao: "data de geração da NDD (preenchida automaticamente via código)",
   data_rfi: "data do RFI informada pelo usuário ou extraída do PPI (formato DD/MM/AAAA)",
   endereco: "endereço completo do site",
@@ -104,66 +104,118 @@ function aliasesPadrao(): AliasColuna[] {
     { id: novoId(), campoSistema: "aev_sem_ca", aliasPdf: "AEV" },
     { id: novoId(), campoSistema: "aev_com_ca", aliasPdf: "ÁREA COM ARRASTO" },
     { id: novoId(), campoSistema: "aev_com_ca", aliasPdf: "ÁREA DE EXPOSIÇÃO COM ARRASTO" },
+    { id: novoId(), campoSistema: "trecho_citado_do_pdf", aliasPdf: "TRECHO CITADO" },
+    { id: novoId(), campoSistema: "trecho_citado_do_pdf", aliasPdf: "TRECHO ORIGINAL" },
+    { id: novoId(), campoSistema: "trecho_citado_do_pdf", aliasPdf: "CITAÇÃO" },
+    { id: novoId(), campoSistema: "trecho_citado_do_pdf", aliasPdf: "CITACAO" },
+    { id: novoId(), campoSistema: "pagina", aliasPdf: "PÁGINA" },
+    { id: novoId(), campoSistema: "pagina", aliasPdf: "PAGINA" },
+    { id: novoId(), campoSistema: "pagina", aliasPdf: "FOLHA" },
   ];
 }
 
-export const INSTRUCOES_PADRAO = `1. CARIMBO ("SITE:"):
-   - Primeira linha (ex: MSRBS006_A) = "site_id_detentor".
-   - Segunda linha (ex: SN-RRRSI4) = "site_id_cliente".
-2. ALTURA DA EV: item 03 da legenda ou cota na elevação da torre (ex: "60"). Se não encontrar, use "60".
-3. LOCALIZAÇÃO E ENDEREÇO (Carimbo):
-   - No carimbo, o endereço costuma vir em linha única separado por hífens (ex: "VC CAFÉ DO POVO - CRISTO VIVO - BREU BRANCO - PA CEP:68695-000").
-   - Isole no campo "endereco" APENAS o logradouro/rua/vicinal/estrada (ex: "VC CAFÉ DO POVO"). NUNCA repita o bairro, cidade, UF ou CEP dentro do campo "endereco".
-   - Extraia separadamente: "bairro" (ex: "CRISTO VIVO" ou "Zona Rural"), "cidade" (ex: "BREU BRANCO"), "uf" (sigla com 2 letras, ex: "PA"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -3.413902 e -49.042893, sem símbolos ° ou letras N/S/E/W).
-4. TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"):
-   - Leia a tabela linha por linha com fidelidade óptica rigorosa:
-   - A coluna "TIPO DE ANTENA" (ou "TIPO" / "TIPO DE EQUIPAMENTO"): extraia EXATAMENTE o texto literal da célula.
-     * "RF" -> extraia "RF"
-     * "RRU" -> extraia EXATAMENTE "RRU" (NUNCA troque por "MODULO"!)
-     * "ODU" -> extraia EXATAMENTE "ODU" (NUNCA troque por "MW"!)
-     * "MW" -> extraia EXATAMENTE "MW"
-     * "MODULO" -> extraia "MODULO" (apenas se a célula de tipo contiver literalmente "MODULO")
-     * "GPS" -> extraia "GPS"
-     * "TMA" -> extraia "TMA"
-     * NUNCA troque "RRU" por "MODULO" e NUNCA troque "ODU" por "MW"! Copie fielmente o que estiver impresso na coluna de tipo.
-   - A coluna "ALTURA" da tabela indica a cota de instalação na torre e deve ser mapeada para "rad_center" (ex: "50,0000" ou "59,0000" ou "60,0000").
-   - A coluna "QUANT.": extraia a quantidade exata indicada na célula (ex: "06" -> "6", "02" -> "2", "01" -> "1").
-   - A coluna "AZIMUTE (N.V.)":
-     * Copie exatamente o valor numérico que antecede o "°" para antenas direcionais (ex: 100°, 280°, 275°, 77°, 96°, 283°). NUNCA assuma 0° para o setor Alpha quando houver outro valor na célula.
-     * ATENÇÃO CRÍTICA (NÃO CONFUNDIR COM DIMENSÕES): Equipamentos como RRU, ODU, GPS e módulos NÃO possuem azimute e trazem hífen "-" na coluna AZIMUTE. NUNCA use a terceira dimensão (profundidade de 120, 84 ou 100 de "440 x 400 x 120" ou "151 x 151 x 84") no campo azimute! Se a coluna azimute trouxer "-", o azimute DEVE ser "-".
-   - A coluna "DIMENSÕES (mm)":
-     * Para equipamentos com 3 dimensões (ex: RF "1400 x 320 x 145", RRU "440 x 400 x 120", ODU "151 x 151 x 84", GPS "150 x 150 x 100"): preencha comprimento, largura e profundidade com cada medida respectiva.
-     * REGRA CRÍTICA PARA ANTENAS MW (Micro-ondas / Parábola / Diâmetro único ex: "900" ou "600"):
-       - O valor da dimensão/diâmetro DEVE OBRIGATORIAMENTE ser gravado no campo "profundidade" (ex: "900").
-       - Os campos "comprimento" e "largura" DEVEM OBRIGATORIAMENTE ficar como "-".
-       - NUNCA coloque o diâmetro ou dimensão da antena MW nos campos "comprimento" ou "largura".
-   - As colunas de ÁREA DE EXPOSIÇÃO e ARRASTO:
-     * "ÁREA DE EXPOSIÇÃO (m²)" -> campo "aev_sem_ca" (ex: "0.888", "0.172", "0.636"). CUIDADO para não confundir o dígito '0' com '6' (ex: copie "0.172" e NUNCA "6.17").
-     * "ARRASTO" -> campo "ca" (ex: "1.2" ou "1.6").
-     * "ÁREA DE EXPOSIÇÃO COM ARRASTO (m²)" -> campo "aev_com_ca" (ex: "1.065", "0.207", "1.018").
-5. ÁREA DE INSTALAÇÃO DO GABINETE (BASE DE CONCRETO):
-   - Procure na LEGENDA da Planta Civil/Planta Baixo/Radier (Página 2), o item de "BASE DE CONCRETO PARA EQUIPAMENTO" "PARA IMPLANTAÇÃO" ou "A INSTALAR".
-   - Extraia as DIMENSÕES da base EXATAMENTE como aparecem no PDF → campo "di_base" (ex: se constar "2X BASE DE CONCRETO (1,00X1,00m)", extraia apenas "1,00x1,00" no campo "di_base"). Pegue apenas o que estiver lá no PDF, ignorando o "2x" ou quantidade.
-   - Extraia a QUANTIDADE de bases se indicada (ex: "2" ou "1") → campo "nx_base". NUNCA multiplique as dimensões pela quantidade de bases.
-   - IMPORTANTE:
-     * Extraia as dimensões individuais literais exatamente como aparecem no PDF
-     * Mantenha a ordem das dimensões EXATAMENTE como aparece no PDF (não inverta)
-     * NUNCA faça cálculos de multiplicação por quantidade (ex: 2x 1,00x1,00 NÃO é 2x2, extraia apenas 1,00x1,00)
-     REGRA DE EXCLUSÃO CRÍTICA: 
-      - IGNORE completamente qualquer medida atrelada a "PROJEÇÃO DE BASE", "FUTURA EXPANSÃO" ou "EXPANSÃO"
-      - IGNORE cotas de hastes ou barras de aterramento (comum apresentarem 2,00m / 2.00m).
-      - IGNORE alturas de gradil, cercas ou afastamentos do muro/divisória (comum apresentarem 2,00m).
-      - IGNORE recuos de segurança ou espaçamentos entre equipamentos.
- REGRA DE EXTRAÇÃO E FORMATO:
-     * Verifique rigorosamente se os dígitos da imagem são "2,10" / "2.10" e não confunda "1" com "0".
-     * A dimensão deve ser a área/superfície da base plana de concreto.
-     * Retorne no formato [Comprimento x Largura] em metros com 2 casas decimais. Exemplo: "2,10x1,30".
-    Exemplos:
-     * "2X BASE DE CONCRETO PARA EQUIPAMENTO TIM 1P (1,00X1,00m)" → nx_base="2", di_base="1,00x1,00"
-     * "1X BASE DE CONCRETO PARA EQUIPAMENTO (3,50X1,30m)" → nx_base="1", di_base="3,50x1,30"
-     * "1X BASE DE CONCRETO (1,30x3,50m)" → nx_base="1", di_base="1,30x3,50" (mantenha a ordem do PDF)
-6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
-7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
+/**
+ * Prompt BTS (v1, 14/10/2026): prompt COMPLETO, enviado como está (ver montarPromptFinal).
+ * Escolhido no teste de 14/10 (8 PPIs + 4 PPIs x 2 execuções): menos erros de valor que o anterior
+ * (5 x 15 sem contar IDs). Os exemplos são FICTÍCIOS de propósito: IDs reais em exemplo eram copiados
+ * pela IA para a resposta (os dois IDs de exemplo do prompt antigo). Detalhes: teste_prompt_gemini\README.md.
+ * O prompt anterior está em backup_prompt_v1_2026-10-14/mapping.ts.
+ */
+export const MARCADOR_PROMPT_BTS_COMPLETO = "MÉTODO ANTI-ALUCINAÇÃO (CITAÇÃO OBRIGATÓRIA)";
+
+export const INSTRUCOES_PADRAO = `Você é um engenheiro de telecomunicações sênior analisando este Projeto Executivo (PPI) em PDF do tipo BTS (Site Novo / Greenfield).
+Extraia os dados técnicos com fidelidade óptica rigorosa a partir do carimbo, desenhos, legendas e tabelas (foco nas páginas 1, 2 e 3).
+Não deduza, não invente e não complete valores que não existam explicitamente no documento. Se não encontrar, use string vazia "".
+
+MÉTODO ANTI-ALUCINAÇÃO (CITAÇÃO OBRIGATÓRIA):
+Para cada grupo de informações, primeiro copie a linha literal do documento no campo de citação correspondente; os valores extraídos devem derivar exclusivamente dessa citação:
+1. "trecho_citado_localizacao" (Página 1): copie a linha literal completa de endereço e coordenadas impressa no carimbo do PDF.
+2. "trecho_citado_base" (Página 2): copie a linha literal da legenda na Planta Civil/Radier que comprova a base de concreto a implantar.
+3. "trecho_citado_do_pdf" (Página 3): para CADA equipamento, copie a linha literal completa da tabela de carregamento. Se a linha não existir na tabela, NÃO crie o equipamento.
+
+REGRAS DE EXTRAÇÃO DE CAMPOS:
+
+1. CARIMBO DO SITE ("SITE:"):
+   - O campo "SITE:" traz dois códigos: o da detentora (Winity) e o da operadora (TIM). Eles podem vir em duas linhas (1ª = detentora, 2ª = operadora) ou numa linha só, um seguido do outro (ex: "XXXXX000_A_SN-XXXXX0").
+   - "site_id_detentor": SOMENTE o código da detentora/Winity: 5 letras + 3 dígitos, mais a letra do candidato quando houver (ex: XXXXX000_A).
+   - "site_id_cliente": SOMENTE o código da operadora (ex: SN-XXXXX0).
+   - Nunca coloque os dois códigos no mesmo campo. Copie letra por letra (não confunda O com 0, I com 1, S com 5).
+
+2. LOCALIZAÇÃO E ENDEREÇO (Carimbo):
+   - "endereco": extraia APENAS o logradouro (rua, avenida ou rodovia). Em rodovias, o quilômetro e complemento fazem parte obrigatória do logradouro (ex: "BR-000 Km 000+000"). NUNCA corte o Km e NUNCA repita o bairro, cidade ou CEP neste campo.
+   - "bairro": extraia EXCLUSIVAMENTE o nome do bairro ou localidade (ex: "Vila Exemplo" ou "Zona Rural"). REGRA CRÍTICA: NUNCA aglutine nem coloque o nome do município/cidade dentro do campo bairro (se o carimbo estiver "VILA EXEMPLO - CIDADE EXEMPLO", o bairro é APENAS "Vila Exemplo").
+   - "cidade": nome do município (ex: "Cidade Exemplo").
+   - "uf": sigla do estado com 2 letras (ex: "MS").
+   - "cep": formato 00000-000.
+   - "latitude" e "longitude": copie EXATAMENTE como impressas no carimbo, com sinal, graus, minutos, segundos e letra (ex: -12°34'56.78"S ou -12.345678). NÃO converta: o sistema converte para grau decimal.
+
+3. ALTURA DA EV (TORRE):
+   - "altura_ev": altura total da torre indicada na cota do topo da elevação ou item da legenda (ex: "40" ou "60").
+
+4. BASE DE CONCRETO (Planta Civil - Página 2):
+   - "nx_base": quantidade literal de bases a implantar (ex: se constar "2X BASE...", extraia "2"; se constar "1X...", extraia "1").
+   - "di_base": dimensões da base no formato "1,00x1,00" (sem "m", sem multiplicar as medidas pela quantidade).
+   - Se não houver base a implantar na legenda civil, deixe "nx_base": "", "di_base": "" e "trecho_citado_base": "".
+
+5. TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO ANTENAS TIM A INSTALAR"):
+   - Extraia exatamente um objeto por linha real da tabela.
+   - "tipo_equipamento": texto literal da coluna TIPO (RF, RRU, MW, ODU, GPS, MODULO). NUNCA troque RRU por MODULO e NUNCA troque ODU por MW.
+   - "modelo": modelo exato impresso na célula.
+   - "qtde": quantidade numérica sem zero à esquerda ("01" -> "1", "04" -> "4").
+   - "azimute": número antes do "°" para antenas direcionais. Para equipamentos sem azimute (RRU, ODU, GPS, Módulo), use OBRIGATORIAMENTE "-".
+   - "comprimento", "largura" e "profundidade":
+     * Equipamentos com 3 dimensões (ex: "1400 x 320 x 145", "440 x 400 x 120"): preencha cada respectivo campo.
+     * REGRA CRÍTICA PARA EQUIPAMENTOS COM 2 DIMENSÕES (ex: GPS AYGE "146 x 78" ou "78 x 146"): preencha "comprimento" e "largura", deixando a "profundidade" OBRIGATORIAMENTE como "-". NUNCA duplique ou deduza uma terceira medida.
+     * Antenas MW com diâmetro único (ex: "600" ou "900"): grave o valor em "profundidade", mantendo "comprimento": "-" e "largura": "-".
+   - "rad_center": cota de instalação na torre (coluna ALTURA).
+   - "aev_sem_ca": valor da coluna ÁREA DE EXPOSIÇÃO (m²).
+   - "ca": valor da coluna ARRASTO.
+   - "aev_com_ca": valor da coluna ÁREA DE EXPOSIÇÃO COM ARRASTO (m²).
+
+FORMATO EXATO DA RESPOSTA:
+{
+  "site_id_cliente": "",
+  "site_id_detentor": "",
+  "data_rfi": "",
+  "data_emissao": "",
+  "endereco": "",
+  "bairro": "",
+  "cidade": "",
+  "cep": "",
+  "uf": "",
+  "latitude": "",
+  "longitude": "",
+  "altura_ev": "",
+  "nx_base": "",
+  "di_base": "",
+  "trecho_citado_localizacao": "",
+  "pagina_localizacao": 1,
+  "trecho_citado_base": "",
+  "pagina_base": 2,
+  "rastreabilidade": {
+    "origem_site_id": "",
+    "origem_altura_torre": "",
+    "origem_equipamentos": "",
+    "base_em_concreto": ""
+  },
+  "equipamentos": [
+    {
+      "tipo_equipamento": "",
+      "modelo": "",
+      "qtde": "",
+      "azimute": "",
+      "comprimento": "",
+      "largura": "",
+      "profundidade": "",
+      "rad_center": "",
+      "aev_sem_ca": "",
+      "ca": "",
+      "aev_com_ca": "",
+      "trecho_citado_do_pdf": "",
+      "pagina": 3
+    }
+  ]
+}`;
 
 export const INSTRUCOES_BTS = INSTRUCOES_PADRAO;
 
@@ -175,6 +227,7 @@ export const INSTRUCOES_COLLO = `1. CARIMBO ("SITE:"):
    - Em projetos de COLLO (colocation/compartilhamento), a torre já existe fisicamente.
    - Procure a cota total no TOPO da torre na elevação/fachada (Folha 03 / Página 3), indicada por cota de nível (ex: "+40,00" ou "+50,00" ou cota total de altura). Use essa altura total (ex: "40" ou "50"). NUNCA confunda com a cota de instalação das antenas (ex: 33m). Se não encontrar, use "40".
 3. LOCALIZAÇÃO E ENDEREÇO (Carimbo):
+   - REGRA ANTI-ALUCINAÇÃO (LOCALIZAÇÃO): Copie OBRIGATORIAMENTE no campo "trecho_citado_localizacao" a linha literal completa de endereço e coordenadas impressa no carimbo do PDF e informe a "pagina_localizacao" (geralmente página 1).
    - Isole no campo "endereco" APENAS o logradouro/rua/vicinal/estrada (ex: "RUA JOSÉ FRANCISCO DOS SANTOS, S/N"). NUNCA repita o bairro, cidade, UF ou CEP dentro do campo "endereco".
    - Extraia separadamente: "bairro" (ex: "COLÔNIA 13" ou "Zona Rural"), "cidade" (ex: "LAGARTO"), "uf" (sigla com 2 letras, ex: "SE"), "cep" (somente dígitos ou formato 00000-000) e COORDENADAS em graus decimais (ex: -10.986597 e -37.547600, sem símbolos ° ou letras N/S/E/W).
 4. TABELA DE EQUIPAMENTOS (Página 3 / Folha 03):
@@ -206,13 +259,19 @@ export const INSTRUCOES_COLLO = `1. CARIMBO ("SITE:"):
        - "ÁREA DE EXPOSIÇÃO COM ARRASTO (m²)" -> campo "aev_com_ca" (ex: "1.022", "2.430", "0.726").
 5. ÁREA DE INSTALAÇÃO DO GABINETE / SOLO:
    - Procure na LEGENDA da Planta Civil (Página 2 / Folha 02) o item de base de concreto para equipamentos TIM (ex: "1. BASE EM CONCRETO 1,0x1,0m PARA IMPLANTAÇÃO DO EQUIPAMENTO OPSS 1P - A INSTALAR" ou "2X BASE DE CONCRETO (1,00X1,00m)").
+   - REGRA ANTI-ALUCINAÇÃO (BASE DE CONCRETO): Copie OBRIGATORIAMENTE no campo "trecho_citado_base" a linha literal da legenda civil que comprova a base a implantar e informe a "pagina_base" (geralmente página 2). Se não houver item de base na legenda civil, deixe "trecho_citado_base": "", "nx_base": "" e "di_base": "".
    - Extraia as DIMENSÕES da base EXATAMENTE como aparecem no PDF (ex: "1,00x1,00" ou "1,0x1,0") -> campo "di_base". Pegue apenas o que estiver no documento, ignorando o "2x" ou quantidade (NUNCA multiplique as dimensões).
    - Extraia a QUANTIDADE de bases se indicada (ex: "1" ou "2") -> campo "nx_base".
-6. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
-7. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
+6. TÉCNICA DE CITAÇÃO OBRIGATÓRIA (ANTI-ALUCINAÇÃO):
+   - EQUIPAMENTOS: copie a linha literal no campo "trecho_citado_do_pdf" e "pagina": 3. Itens sem comprovação serão descartados.
+   - LOCALIZAÇÃO: copie a linha literal do carimbo no campo "trecho_citado_localizacao" e "pagina_localizacao": 1. NUNCA invente logradouros ou coordenadas.
+   - BASE DE CONCRETO: copie a legenda literal no campo "trecho_citado_base" e "pagina_base": 2. Se não houver base a implantar, deixe vazio.
+7. RASTREABILIDADE: indique em qual página/item cada grupo de dados foi encontrado.
+8. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.`;
 
 export const CONFIG_PADRAO: ConfigAutomacao = {
   tipoProjeto: "bts",
+  usarSchema: false,
   instrucoesBts: INSTRUCOES_BTS,
   instrucoesCollo: INSTRUCOES_COLLO,
   instrucoes: INSTRUCOES_BTS,
@@ -272,15 +331,9 @@ export function carregarConfig(): ConfigAutomacao {
     const tipoProjeto: TipoProjeto = j.tipoProjeto === "collo" ? "collo" : "bts";
 
     let instrucoesBts = typeof j.instrucoesBts === "string" && j.instrucoesBts.trim() ? j.instrucoesBts : "";
-    if (
-      !instrucoesBts ||
-      !instrucoesBts.includes("fidelidade óptica rigorosa") ||
-      instrucoesBts.includes("RRU será tratado como MODULO") ||
-      instrucoesBts.includes('onde constar "MODULO", extraia "MODULO"') ||
-      !instrucoesBts.includes('NUNCA troque "RRU" por "MODULO"') ||
-      instrucoesBts.includes("O cálculo da área total será feito automaticamente") ||
-      !instrucoesBts.includes("Pegue apenas o que estiver lá no PDF")
-    ) {
+    // Prompt BTS antigo (só instruções, sem o formato da resposta) é trocado pelo prompt completo atual;
+    // um prompt completo editado pelo usuário (tem o marcador) é mantido.
+    if (!instrucoesBts || !instrucoesBts.includes(MARCADOR_PROMPT_BTS_COMPLETO)) {
       instrucoesBts = INSTRUCOES_BTS;
     }
 
@@ -328,6 +381,7 @@ export function carregarConfig(): ConfigAutomacao {
 
     return {
       tipoProjeto,
+      usarSchema: j.usarSchema === true,
       instrucoesBts,
       instrucoesCollo,
       instrucoes: instrucoesAtivas,
@@ -359,6 +413,7 @@ export function salvarConfig(cfg: ConfigAutomacao): void {
 export function resetarConfig(): ConfigAutomacao {
   const c: ConfigAutomacao = {
     tipoProjeto: "bts",
+    usarSchema: false,
     instrucoesBts: INSTRUCOES_BTS,
     instrucoesCollo: INSTRUCOES_COLLO,
     instrucoes: INSTRUCOES_BTS,
@@ -378,8 +433,8 @@ export function resetarConfig(): ConfigAutomacao {
  * Monta o prompt completo enviado ao Gemini a partir da configuração do
  * usuário e do tipo de projeto ativo (BTS ou COLLO).
  */
-export function montarPromptFinal(cfg: ConfigAutomacao, tipoProjeto?: TipoProjeto): string {
-  const tipo = tipoProjeto ?? cfg.tipoProjeto ?? "bts";
+/** Campos simples que a IA deve extrair: os do mapa de células (sem valor fixo) + nx_base/di_base. */
+function camposExtraidos(cfg: ConfigAutomacao): string[] {
   const camposDoSchema: string[] = [];
 
   // Coletar apenas os campos que precisam ser extraídos (sem células)
@@ -399,12 +454,85 @@ export function montarPromptFinal(cfg: ConfigAutomacao, tipoProjeto?: TipoProjet
   if (!camposDoSchema.includes("di_base")) {
     camposDoSchema.push("di_base");
   }
+  return camposDoSchema;
+}
+
+/**
+ * Monta o responseSchema do Gemini (modo "Schema") a partir do mesmo mapa que gera o prompt
+ * (prompt e schema nunca ficam dessincronizados).
+ * A ordem das propriedades (propertyOrdering) faz a IA escrever a citação literal
+ * ANTES dos valores: carimbo antes do endereço, legenda antes da base, linha da tabela antes do equipamento.
+ */
+export function montarSchemaResposta(cfg: ConfigAutomacao): Record<string, unknown> {
+  const texto = { type: "STRING" };
+  const inteiro = { type: "INTEGER" };
+  const camposBase = ["nx_base", "di_base"];
+  const campos = camposExtraidos(cfg).filter((c) => !camposBase.includes(c));
+
+  const camposEquipamento = [
+    "trecho_citado_do_pdf", "pagina", "tipo_equipamento", "modelo", "qtde", "azimute",
+    "comprimento", "largura", "profundidade", "rad_center", "aev_sem_ca", "ca", "aev_com_ca",
+  ];
+  const propsEquipamento: Record<string, unknown> = {};
+  camposEquipamento.forEach((c) => { propsEquipamento[c] = c === "pagina" ? inteiro : texto; });
+
+  const camposRastreabilidade = ["origem_site_id", "origem_altura_torre", "origem_equipamentos", "base_em_concreto"];
+  const propsRastreabilidade: Record<string, unknown> = {};
+  camposRastreabilidade.forEach((c) => { propsRastreabilidade[c] = texto; });
+
+  const properties: Record<string, unknown> = {
+    trecho_citado_localizacao: texto,
+    pagina_localizacao: inteiro,
+  };
+  campos.forEach((c) => { properties[c] = texto; });
+  properties.trecho_citado_base = texto;
+  properties.pagina_base = inteiro;
+  properties.nx_base = texto;
+  properties.di_base = texto;
+  properties.rastreabilidade = {
+    type: "OBJECT",
+    properties: propsRastreabilidade,
+    required: camposRastreabilidade,
+    propertyOrdering: camposRastreabilidade,
+  };
+  properties.equipamentos = {
+    type: "ARRAY",
+    items: {
+      type: "OBJECT",
+      properties: propsEquipamento,
+      required: camposEquipamento,
+      propertyOrdering: camposEquipamento,
+    },
+  };
+
+  const ordem = Object.keys(properties);
+  return { type: "OBJECT", properties, required: ordem, propertyOrdering: ordem };
+}
+
+/** Campos simples que o prompt BTS completo já pede (o resto do mapa entra como "CAMPOS ADICIONAIS"). */
+const CAMPOS_PROMPT_BTS = [
+  "site_id_cliente", "site_id_detentor", "data_rfi", "data_emissao", "endereco", "bairro", "cidade",
+  "cep", "uf", "latitude", "longitude", "altura_ev", "nx_base", "di_base",
+];
+
+export function montarPromptFinal(cfg: ConfigAutomacao, tipoProjeto?: TipoProjeto): string {
+  const tipo = tipoProjeto ?? cfg.tipoProjeto ?? "bts";
+  const camposDoSchema = camposExtraidos(cfg);
 
   const schemaCampos = camposDoSchema.map((c) => `  "${c}": "",`).join("\n");
 
   const instrucoesAtivas = tipo === "collo"
     ? (cfg.instrucoesCollo?.trim() || INSTRUCOES_COLLO)
     : (cfg.instrucoesBts?.trim() || cfg.instrucoes?.trim() || INSTRUCOES_BTS);
+
+  // BTS: o prompt completo (com o formato da resposta) vai exatamente como foi testado.
+  // Campos criados pelo usuário no mapa de células são acrescentados no fim.
+  if (tipo !== "collo" && instrucoesAtivas.includes(MARCADOR_PROMPT_BTS_COMPLETO)) {
+    const extras = camposExtraidos(cfg).filter((c) => !CAMPOS_PROMPT_BTS.includes(c));
+    if (extras.length === 0) return instrucoesAtivas;
+    return `${instrucoesAtivas}\n\nCAMPOS ADICIONAIS (inclua também no JSON, no nível principal, como string; "" se não existir no documento):\n`
+      + extras.map((c) => `- "${c}": ${DESCRICOES_CAMPOS[c] ?? "extraia do documento"}`).join("\n");
+  }
 
   const tituloTabelaEquip = tipo === "collo"
     ? 'TABELA DE EQUIPAMENTOS (Página 3 - "CARREGAMENTO TIM - À INSTALAR"):'
@@ -414,11 +542,11 @@ export function montarPromptFinal(cfg: ConfigAutomacao, tipoProjeto?: TipoProjet
     ? `extraia um objeto por equipamento com os valores brutos da tabela de carregamento da TIM.
 IMPORTANTE: Extraia APENAS os equipamentos da tabela "CARREGAMENTO TIM - À INSTALAR" e IGNORE completamente a tabela de equipamentos existentes.
 - AZIMUTE: se os setores vierem agrupados na mesma linha (ex: "125°/230°/315°"), copie a sequência ("125/230/315"). Mantenha a linha agrupada com sua respectiva QUANT.
-- DIMENSÕES: para antenas de 3 dimensões (ex: "710 x 400 x 192"), preencha comprimento, largura e profundidade com cada medida. Para antenas MW com diâmetro único (ex: "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
+- DIMENSÕES: para antenas de 3 dimensões, preencha comprimento, largura e profundidade. Para equipamentos com apenas 2 dimensões (ex: GPS "146 x 78"), extraia apenas comprimento e largura, mantendo a profundidade "-". Para antenas MW com diâmetro único (ex: "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
 - AEV: copie os valores decimais com atenção redobrada aos dígitos (ex: "0.852", "2.025", "0.605").`
     : `extraia um objeto por equipamento com os valores brutos da tabela de carregamento.
 - AZIMUTE: copie rigorosamente o valor que antecede o "°" na coluna AZIMUTE (ex: "160" e NUNCA "0" quando a célula indicar 160°; "220"; "340"). Se estiver "-" use "-".
-- DIMENSÕES: para antenas celulares de 3 dimensões (ex: "2500 x 355 x 192"), preencha comprimento, largura e profundidade com cada medida. Para antenas MW com diâmetro único (ex: "900" ou "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
+- DIMENSÕES: para antenas celulares de 3 dimensões, preencha comprimento, largura e profundidade. Para equipamentos com apenas 2 dimensões (ex: GPS "146 x 78"), extraia apenas comprimento e largura, mantendo a profundidade "-". Para antenas MW com diâmetro único (ex: "900" ou "600"), coloque o diâmetro OBRIGATORIAMENTE em "profundidade", e coloque "-" em "comprimento" e "largura".
 - AEV: copie os valores decimais com atenção redobrada aos dígitos (ex: "0.172" e NUNCA "6.17").`;
 
   return `Você é um engenheiro de telecomunicações sênior analisando este Projeto Executivo (PPI) em PDF do tipo ${tipo.toUpperCase()} (${tipo === "collo" ? "Compartilhamento / Colocation" : "Site Novo / Greenfield"}).
@@ -433,18 +561,38 @@ ${camposDoSchema.map((c) => `- ${c}`).join("\n")}
 ${tituloTabelaEquip} ${detalheTabelaEquip}
 Não faça conversões manuais de unidades — a aplicação fará a normalização, decomposição e conversão de mm para metros automaticamente.
 
+TÉCNICA DA CITAÇÃO OBRIGATÓRIA (ANTI-ALUCINAÇÃO):
+1. EQUIPAMENTOS:
+- Para CADA equipamento listado, copie OBRIGATORIAMENTE no campo "trecho_citado_do_pdf" a linha ou trecho literal impresso na tabela do PDF que comprova sua existência física (ex: "RF | APXVLL199014-C-A20 | 06 | 100° | 1400 x 320 x 145 | ...") e indique a "pagina" (geralmente página 3).
+- REGRA ANTI-ALUCINAÇÃO CRÍTICA: Se não houver uma linha real na tabela do PDF comprovando o equipamento, NÃO o inclua. Equipamentos sem citação exata serão descartados automaticamente pelo sistema.
+
+2. LOCALIZAÇÃO E ENDEREÇO (Carimbo):
+- Copie OBRIGATORIAMENTE no campo "trecho_citado_localizacao" a linha literal completa de endereço e coordenadas impressa no carimbo do PDF (ex: "VC CAFÉ DO POVO - CRISTO VIVO - BREU BRANCO - PA CEP:68695-000 | COORD: -3.413902, -49.042893") e indique a "pagina_localizacao" (geralmente 1).
+- NUNCA invente logradouros, bairros ou coordenadas.
+
+3. BASE DE CONCRETO (Planta Civil/Radier):
+- Copie OBRIGATORIAMENTE no campo "trecho_citado_base" a linha literal da legenda na Folha 02 / Planta Civil (ex: "1. BASE EM CONCRETO 1,0x1,0m PARA IMPLANTAÇÃO DO EQUIPAMENTO OPSS 1P - A INSTALAR" ou "2X BASE DE CONCRETO (1,00X1,00m)") e indique a "pagina_base" (geralmente 2).
+- Se o projeto NÃO possuir base de concreto ou a legenda civil não contiver item de base a implantar, deixe "trecho_citado_base": "", "nx_base": "" e "di_base": "".
+- NUNCA confunda cotas de aterramento (2,00m), gradil ou expansão com base de concreto. O sistema descartará a base se o trecho citado não contiver comprovação real de base em concreto.
+
 REGRAS FINAIS:
 1. Se um dado NÃO existir no documento, use string vazia "" — NUNCA invente valores.
-2. Responda APENAS com o JSON abaixo. SEM crases, SEM bloco \`\`\`json, SEM texto antes ou depois.
+2. Em "rastreabilidade", escreva a página e o item/tabela onde VOCÊ encontrou cada grupo de dados NESTE PDF (ex: "Pág. 1 — carimbo SITE"). Se não encontrou, deixe "".
+3. ENDEREÇO EM RODOVIA/ESTRADA: o quilômetro faz parte do logradouro. Copie em "endereco" a rodovia COM o km e o complemento exatamente como no carimbo (ex: "BR-000 Km 00+000", "SP-000 Km 00,5"). NUNCA corte o "Km" deixando só o nome da rodovia.
+4. Responda APENAS com o JSON abaixo. SEM crases, SEM bloco \`\`\`json, SEM texto antes ou depois.
 
 FORMATO EXATO DA RESPOSTA:
 {
 ${schemaCampos || '  "site_id_cliente": "",'}
+  "trecho_citado_localizacao": "",
+  "pagina_localizacao": 1,
+  "trecho_citado_base": "",
+  "pagina_base": 2,
   "rastreabilidade": {
-    "origem_site_id": "Páginas 1, 2 e 3 — carimbo SITE",
-    "origem_altura_torre": "${tipo === "collo" ? "Página 3 cota do topo da elevação da torre" : "Página 2 item 03 e Página 3 elevação"}",
-    "origem_equipamentos": "${tipo === "collo" ? "Página 3 — tabela CARREGAMENTO TIM - À INSTALAR" : "Página 3 — tabela de carregamento"}",
-    "base_em_concreto":   "Página 2 e 9 — LEGENDA da Planta Civil/Planta Baixo/Radier"
+    "origem_site_id": "",
+    "origem_altura_torre": "",
+    "origem_equipamentos": "",
+    "base_em_concreto": ""
   },
   "equipamentos": [
     {
@@ -458,7 +606,9 @@ ${schemaCampos || '  "site_id_cliente": "",'}
       "rad_center": "",
       "aev_sem_ca": "",
       "ca": "",
-      "aev_com_ca": ""
+      "aev_com_ca": "",
+      "trecho_citado_do_pdf": "",
+      "pagina": 3
     }
   ]
 }`;

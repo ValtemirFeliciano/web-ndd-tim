@@ -176,6 +176,17 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
 
       <Grupo titulo="Localização" icone={<MapPin size={13} />}>
         <div className="grid gap-3">
+          {dados.trecho_citado_localizacao && (
+            <div
+              className="flex items-center gap-1.5 rounded bg-cyan-950/60 border border-cyan-800/50 px-2.5 py-1 text-[10px] text-cyan-300 font-mono"
+              title={`Trecho citado do carimbo (Pág. ${dados.pagina_localizacao ?? 1}):\n"${dados.trecho_citado_localizacao}"`}
+            >
+              <span className="rounded bg-cyan-900/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-cyan-200 shrink-0">
+                Carimbo Pág. {dados.pagina_localizacao ?? 1}
+              </span>
+              <span className="truncate italic text-mist-300">"{dados.trecho_citado_localizacao}"</span>
+            </div>
+          )}
           <Campo rotulo="Endereço completo" celula="D12" mono={false} valor={dados.endereco} onChange={(v) => onCampo("endereco", v)} />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Campo rotulo="Bairro" celula="B13" mono={false} valor={dados.bairro} onChange={(v) => onCampo("bairro", v)} />
@@ -188,6 +199,17 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
             <Campo rotulo="Longitude" celula="J11" valor={dados.longitude} onChange={(v) => onCampo("longitude", v)} />
             <Campo rotulo="Altura da EV (m)" celula="D14" valor={dados.altura_ev} onChange={(v) => onCampo("altura_ev", v)} />
             <Campo rotulo="Dimensões da Base" celula="K46" valor={dados.di_base ?? ""} onChange={(v) => onCampo("di_base", v)} placeholder="ex: 1,00x1,00" />
+            {dados.trecho_citado_base && (
+              <div
+                className="col-span-2 sm:col-span-4 flex items-center gap-1.5 rounded bg-amber-950/40 border border-amber-800/40 px-2.5 py-1 text-[10px] text-amber-300 font-mono"
+                title={`Trecho citado da legenda civil (Pág. ${dados.pagina_base ?? 2}):\n"${dados.trecho_citado_base}"`}
+              >
+                <span className="rounded bg-amber-900/80 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-amber-200 shrink-0">
+                  Legenda Civil Pág. {dados.pagina_base ?? 2}
+                </span>
+                <span className="truncate italic text-mist-300">"{dados.trecho_citado_base}"</span>
+              </div>
+            )}
           </div>
         </div>
       </Grupo>
@@ -236,6 +258,17 @@ export default function ExtractionPanel({ dados, avisos, meta, onCampo, onEquip,
                           onChange={(e) => onEquip(i, c.chave, e.target.value)}
                           className={`field-input w-full px-2 py-1.5 font-mono text-xs ${c.align ?? "text-left"} ${eq[c.chave] ? "" : "input-empty"}`}
                         />
+                        {c.chave === "modelo" && eq.trecho_citado_do_pdf && (
+                          <div
+                            className="mt-1 flex items-center gap-1 font-mono text-[9px] text-cyan-400/90 truncate max-w-[210px]"
+                            title={`Comprovação Anti-Alucinação (Pág. ${eq.pagina || 3}):\n"${eq.trecho_citado_do_pdf}"`}
+                          >
+                            <span className="inline-block rounded bg-cyan-950/80 border border-cyan-800/60 px-1 text-[8px] text-cyan-300 font-semibold uppercase shrink-0">
+                              Pág. {eq.pagina || 3}
+                            </span>
+                            <span className="truncate italic text-mist-400">"{eq.trecho_citado_do_pdf}"</span>
+                          </div>
+                        )}
                       </td>
                     ))}
                     <td className="px-1.5 py-1.5 text-center">

@@ -8,15 +8,17 @@ import ConfigPage from "./components/ConfigPage";
 import MassProcessingPage from "./components/MassProcessingPage";
 import { extrairDoPdf, listarModelos, testarConexao, validarDados, MODELOS_PADRAO } from "./lib/gemini";
 import { gerarNddPreenchido, baixarBlob } from "./lib/excel";
-import { carregarConfig, salvarConfig, montarPromptFinal, INSTRUCOES_BTS, INSTRUCOES_COLLO } from "./lib/mapping";
+import { carregarConfig, salvarConfig, montarPromptFinal, montarSchemaResposta, INSTRUCOES_BTS, INSTRUCOES_COLLO } from "./lib/mapping";
 import { usePastaPadrao } from "./hooks/usePastaPadrao";
 import { salvarNddIndividualEmSubpasta, gerarZipNddIndividual } from "./lib/fileSystem";
 import { logger } from "./lib/logger";
 import {
   EQUIPAMENTO_VAZIO,
   type ArquivoInfo, type ConfigAutomacao, type DadosPPI, type Equipamento, type LogEntry, type LogLevel,
+  type ProvedorIA, type ConfigIA,
   type ResultadoExtracao, type StepId, type StepStatus, type TemplateInfo, type TipoProjeto,
 } from "./types";
+import { MODELO_QWEN_PADRAO, testarConexaoQwen } from "./lib/qwen";
 
 const LS_CONFIG = "nddforge.config.v1";
 const LS_ULTIMA = "nddforge.ultima.v1";
@@ -26,8 +28,8 @@ const STEPS_INICIAIS: Record<StepId, StepStatus> = {
 };
 
 const JSON_EXEMPLO = `{
-  "site_id_cliente": "SN-RRRSI4",
-  "site_id_detentor": "MSRBS006_A",
+  "site_id_cliente": "SN-XXXXX0",
+  "site_id_detentor": "XXXXX000_A",
   "endereco": "Rodovia BR-116, km 42",
   "latitude": "-22.906847",
   "altura_ev": "60",
@@ -37,15 +39,30 @@ const JSON_EXEMPLO = `{
   ]
 }`;
 
-function lerConfig(): { apiKey: string; modelo: string } {
+function lerConfig(): ConfigIA {
   try {
     const raw = localStorage.getItem(LS_CONFIG);
     if (raw) {
       const j = JSON.parse(raw);
-      return { apiKey: j.apiKey ?? "", modelo: j.modelo ?? MODELOS_PADRAO[0] };
+      return {
+        provedor: j.provedor ?? "gemini",
+        apiKey: j.apiKey ?? "",
+        modelo: j.modelo ?? MODELOS_PADRAO[0],
+        qwenApiKey: j.qwenApiKey ?? "",
+        qwenModelo: j.qwenModelo ?? MODELO_QWEN_PADRAO,
+        qwenBaseUrl: j.qwenBaseUrl ?? "",
+        fallbackAtivo: j.fallbackAtivo ?? true,
+      };
     }
   } catch { /* ignora config corrompida */ }
-  return { apiKey: "", modelo: MODELOS_PADRAO[0] };
+  return {
+    provedor: "gemini",
+    apiKey: "",
+    modelo: MODELOS_PADRAO[0],
+    qwenApiKey: "",
+    qwenModelo: MODELO_QWEN_PADRAO,
+    fallbackAtivo: true,
+  };
 }
 
 function lerUltima(): { dados: DadosPPI; meta: string } | null {
@@ -58,10 +75,16 @@ function lerUltima(): { dados: DadosPPI; meta: string } | null {
 
 export default function App() {
   const cfgInicial = useRef(lerConfig()).current;
+  const [provedor, setProvedor] = useState<ProvedorIA>(cfgInicial.provedor);
   const [apiKey, setApiKey] = useState(cfgInicial.apiKey);
   const [modelo, setModelo] = useState(cfgInicial.modelo);
+  const [qwenApiKey, setQwenApiKey] = useState(cfgInicial.qwenApiKey ?? "");
+  const [qwenModelo, setQwenModelo] = useState(cfgInicial.qwenModelo ?? MODELO_QWEN_PADRAO);
+  const [qwenBaseUrl, setQwenBaseUrl] = useState(cfgInicial.qwenBaseUrl ?? "");
+  const [fallbackAtivo, setFallbackAtivo] = useState(cfgInicial.fallbackAtivo ?? true);
   const [modelos, setModelos] = useState<string[]>([]);
   const [teste, setTeste] = useState<TesteState>({ status: "idle", msg: "" });
+  const [testeQwen, setTesteQwen] = useState<TesteState>({ status: "idle", msg: "" });
   const [listando, setListando] = useState(false);
 
   const [ppi, setPpi] = useState<ArquivoInfo | null>(null);
@@ -109,6 +132,16 @@ export default function App() {
   const [cfg, setCfg] = useState<ConfigAutomacao>(() => carregarConfig());
   const primeiroRenderCfg = useRef(true);
   const promptFinal = useMemo(() => montarPromptFinal(cfg, cfg.tipoProjeto), [cfg]);
+  const schemaResposta = useMemo(() => montarSchemaResposta(cfg), [cfg]);
+
+  const aoMudarUsarSchema = (usar: boolean) => {
+    setCfg((prev) => {
+      const novaCfg: ConfigAutomacao = { ...prev, usarSchema: usar };
+      salvarConfig(novaCfg);
+      return novaCfg;
+    });
+    log("info", `Modo de resposta da IA alterado para: ${usar ? "SCHEMA (campos fixos)" : "LIVRE (JSON sem schema)"}.`);
+  };
 
   const aoMudarTipoProjeto = (t: TipoProjeto) => {
     setCfg((prev) => {
@@ -148,8 +181,19 @@ export default function App() {
 
   /* persistência */
   useEffect(() => {
-    localStorage.setItem(LS_CONFIG, JSON.stringify({ apiKey, modelo }));
-  }, [apiKey, modelo]);
+    localStorage.setItem(
+      LS_CONFIG,
+      JSON.stringify({
+        provedor,
+        apiKey,
+        modelo,
+        qwenApiKey,
+        qwenModelo,
+        qwenBaseUrl,
+        fallbackAtivo,
+      })
+    );
+  }, [provedor, apiKey, modelo, qwenApiKey, qwenModelo, qwenBaseUrl, fallbackAtivo]);
 
   useEffect(() => {
     if (dados && meta) {
@@ -205,8 +249,11 @@ export default function App() {
   /* ------------------------- extração ------------------------- */
 
   const extrair = async () => {
-    if (!apiKey.trim()) {
-      setTeste({ status: "erro", msg: "Configure sua chave da API Gemini no botão 'Configurar API' (topo da página)." });
+    const chaveGeminiOk = apiKey.trim().length > 0;
+    const chaveQwenOk = qwenApiKey.trim().length > 0;
+
+    if (!chaveGeminiOk && !chaveQwenOk) {
+      setTeste({ status: "erro", msg: "Configure uma chave de API (Gemini ou QwenCloud) no botão 'Configurar API' (topo da página)." });
       log("error", "Execução bloqueada: nenhuma chave de API configurada.");
       return;
     }
@@ -227,7 +274,8 @@ export default function App() {
     setRawRequest("");
     setRawResponse("");
     setFase("Preparando arquivo…");
-    log("info", `═══ Nova extração iniciada · arquivo: ${ppi.nome} · modelo: ${modelo} ═══`);
+    const descIA = provedor === "qwen" ? `QwenCloud (${qwenModelo})` : `Gemini (${modelo})`;
+    log("info", `═══ Nova extração iniciada · arquivo: ${ppi.nome} · IA: ${descIA} ═══`);
 
     // leva a tela até o console de debug — apenas se o switch estiver ligado
     if (autoScroll) {
@@ -245,7 +293,14 @@ export default function App() {
       marcarStep("gemini", "running");
       setFase("A IA está lendo o PPI (pode levar ~30s)…");
       log("info", `Prompt da configuração aplicado: ${promptFinal.length} chars · ${cfg.mapeamento.length} regra(s) no mapa · ${cfg.aliasesColunas.length} alias(es) de colunas · tabela de equipamentos a partir da linha ${cfg.linhaInicialEq}.`);
-      const r = await extrairDoPdf(apiKey.trim(), modelo, ppi, promptFinal, cfg.aliasesColunas, log);
+      const r = await extrairDoPdf(apiKey.trim(), modelo, ppi, promptFinal, cfg.aliasesColunas, log, {
+        provedor,
+        qwenApiKey: qwenApiKey.trim(),
+        qwenModelo,
+        qwenBaseUrl: qwenBaseUrl.trim(),
+        fallbackAtivo,
+        responseSchema: cfg.usarSchema ? schemaResposta : undefined,
+      });
       marcarStep("gemini", "done");
       setRawRequest(r.rawRequest);
       setRawResponse(r.rawResponse);
@@ -456,6 +511,18 @@ export default function App() {
     }
   };
 
+  const aoTestarQwen = async () => {
+    setTesteQwen({ status: "busy", msg: "" });
+    try {
+      const resp = await testarConexaoQwen(qwenApiKey.trim(), qwenModelo, qwenBaseUrl);
+      setTesteQwen({ status: "ok", msg: `Conexão OK com QwenCloud (${qwenModelo}) — resposta: "${resp}".` });
+      log("ok", `Teste de conexão QwenCloud: ${qwenModelo} respondeu "${resp}".`);
+    } catch (e: any) {
+      setTesteQwen({ status: "erro", msg: e?.message ?? String(e) });
+      log("error", `Teste de conexão QwenCloud falhou: ${e?.message}`);
+    }
+  };
+
   const aoListarModelos = async () => {
     setListando(true);
     try {
@@ -490,10 +557,22 @@ export default function App() {
         onTestar={aoTestar}
         teste={teste}
         listando={listando}
+        provedor={provedor}
+        onProvedorChange={setProvedor}
+        qwenApiKey={qwenApiKey}
+        onQwenApiKeyChange={setQwenApiKey}
+        qwenModelo={qwenModelo}
+        onQwenModeloChange={setQwenModelo}
+        onTestarQwen={aoTestarQwen}
+        testeQwen={testeQwen}
+        fallbackAtivo={fallbackAtivo}
+        onFallbackAtivoChange={setFallbackAtivo}
         pagina={pagina}
         onPagina={setPagina}
         tipoProjeto={cfg.tipoProjeto ?? "bts"}
         onTipoProjetoChange={aoMudarTipoProjeto}
+        usarSchema={cfg.usarSchema === true}
+        onUsarSchemaChange={aoMudarUsarSchema}
       />
 
       {pagina === "config" ? (
@@ -513,6 +592,11 @@ export default function App() {
           promptFinal={promptFinal}
           templateBuffer={template?.buffer ?? null}
           log={log}
+          provedor={provedor}
+          qwenApiKey={qwenApiKey}
+          qwenModelo={qwenModelo}
+          qwenBaseUrl={qwenBaseUrl}
+          fallbackAtivo={fallbackAtivo}
         />
       ) : (
       <main className="mx-auto grid min-w-0 max-w-[1840px] w-full gap-6 px-4 py-7 sm:px-6 lg:px-8 xl:px-10 lg:grid-cols-[390px_1fr] xl:grid-cols-[420px_1fr]">
@@ -603,9 +687,9 @@ export default function App() {
                 rolar até o console · {autoScroll ? "on" : "off"}
               </span>
             </button>
-            {!apiKey.trim() && (
+            {!apiKey.trim() && !qwenApiKey.trim() && (
               <p className="fade-in rounded border border-warn-400/40 bg-warn-400/8 px-3 py-2 font-mono text-[10px] leading-snug text-warn-400">
-                ▲ Primeiro passo: clique em "Configurar API" no topo e cole sua chave do Google AI Studio.
+                ▲ Primeiro passo: clique em "Configurar API" no topo e cole sua chave do Google AI Studio ou do QwenCloud.
               </p>
             )}
 
